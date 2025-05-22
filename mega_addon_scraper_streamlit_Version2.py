@@ -45,8 +45,7 @@ def collect_blender_market(pages):
     for page in range(1, pages+1):
         url = f'https://blendermarket.com/products?page={page}'
         resp = requests.get(url, headers=headers)
-        # Debugging lines لمراجعة محتوى الصفحات وحالة الاستجابة
-        st.write(f"صفحة {page} status code:", resp.status_code)
+        st.write(f"Blender Market صفحة {page} status code:", resp.status_code)
         st.write(resp.text[:1000])
         if not resp.ok:
             break
@@ -60,7 +59,7 @@ def collect_orbolt(pages):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     for page in range(1, pages+1):
-        url = f'https://www.orbolt.com/store/home?page={page}'
+        url = f'https://www.orbolt.com/asset/all?page={page}'
         resp = requests.get(url, headers=headers)
         st.write(f"Orbolt صفحة {page} status code:", resp.status_code)
         st.write(resp.text[:1000])
