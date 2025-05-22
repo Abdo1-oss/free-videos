@@ -39,9 +39,15 @@ run = st.button("ابدأ الجمع الآن")
 
 def collect_blender_market(pages):
     all_addons = set()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
     for page in range(1, pages+1):
         url = f'https://blendermarket.com/products?page={page}'
-        resp = requests.get(url)
+        resp = requests.get(url, headers=headers)
+        # Debugging lines لمراجعة محتوى الصفحات وحالة الاستجابة
+        st.write(f"صفحة {page} status code:", resp.status_code)
+        st.write(resp.text[:1000])
         if not resp.ok:
             break
         found = re.findall(r'/products/([^"/?]+)', resp.text)
@@ -50,9 +56,14 @@ def collect_blender_market(pages):
 
 def collect_orbolt(pages):
     all_addons = set()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
     for page in range(1, pages+1):
         url = f'https://www.orbolt.com/store/home?page={page}'
-        resp = requests.get(url)
+        resp = requests.get(url, headers=headers)
+        st.write(f"Orbolt صفحة {page} status code:", resp.status_code)
+        st.write(resp.text[:1000])
         if not resp.ok:
             break
         found = re.findall(r'/asset/([^"/?]+)', resp.text)
@@ -61,9 +72,14 @@ def collect_orbolt(pages):
 
 def collect_unreal_marketplace(pages):
     all_addons = set()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
     for page in range(1, pages+1):
         url = f'https://www.unrealengine.com/marketplace/en-US/store?page={page}'
-        resp = requests.get(url)
+        resp = requests.get(url, headers=headers)
+        st.write(f"Unreal صفحة {page} status code:", resp.status_code)
+        st.write(resp.text[:1000])
         if not resp.ok:
             break
         found = re.findall(r'/marketplace/en-US/product/([^"/?]+)', resp.text)
@@ -72,15 +88,21 @@ def collect_unreal_marketplace(pages):
 
 def collect_sketchup_extensions(pages):
     all_addons = set()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
     for page in range(1, pages+1):
         url = f'https://extensions.sketchup.com/search?page={page}'
         try:
-            resp = requests.get(url)
+            resp = requests.get(url, headers=headers)
+            st.write(f"SketchUp صفحة {page} status code:", resp.status_code)
+            st.write(resp.text[:1000])
             if not resp.ok:
                 break
             found = re.findall(r'/extension/([^"/?]+)', resp.text)
             all_addons.update(found)
-        except Exception:
+        except Exception as e:
+            st.warning(f"خطأ في الصفحة {page}: {e}")
             break
     return all_addons
 
