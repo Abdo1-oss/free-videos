@@ -1,6 +1,7 @@
-streamlit
 openai-whisper
 moviepy==1.0.3
 gtts
-googletrans
+googletrans==4.0.0rc1
 ffmpeg-python
+whisper
+streamlit
