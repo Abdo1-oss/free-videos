@@ -1,2 +1,5 @@
 streamlit
-requests
+whisper
+moviepy
+gtts
+googletrans
