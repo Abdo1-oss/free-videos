@@ -3,3 +3,4 @@ whisper
 moviepy
 gtts
 googletrans
+moviepy
