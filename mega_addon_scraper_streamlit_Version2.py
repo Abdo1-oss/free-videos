@@ -1,43 +1,45 @@
 import streamlit as st
-import requests
-import re
+import whisper
+from moviepy.editor import VideoFileClip, AudioFileClip
+from gtts import gTTS
+import os
 
-st.title("جمع إضافات Unreal Marketplace تلقائياً (Streamlit Cloud)")
+st.title("🎬 أداة دبلجة الفيديو بالذكاء الاصطناعي")
 
-pages = st.number_input(
-    "عدد الصفحات (كل صفحة فيها إضافات عديدة):",
-    min_value=1,
-    max_value=20,
-    value=3
-)
+uploaded_file = st.file_uploader("📤 ارفع الفيديو", type=["mp4", "mov", "avi"])
 
-run = st.button("ابدأ الجمع الآن")
+if uploaded_file:
+    with open("input_video.mp4", "wb") as f:
+        f.write(uploaded_file.read())
+    st.video("input_video.mp4")
 
-def collect_unreal_marketplace(pages):
-    all_addons = set()
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    }
-    for page in range(1, pages+1):
-        url = f'https://www.unrealengine.com/marketplace/en-US/store?page={page}'
-        resp = requests.get(url, headers=headers)
-        if not resp.ok:
-            st.error(f"لم يتم جلب الصفحة رقم {page} (status code: {resp.status_code})")
-            continue
-        found = re.findall(r'/marketplace/en-US/product/([^"/?]+)', resp.text)
-        all_addons.update(found)
-    return all_addons
+    st.info("⏳ جاري استخراج الصوت وتحويله لنص...")
+    model = whisper.load_model("base")
+    result = model.transcribe("input_video.mp4")
+    original_text = result["text"]
+    st.success("✅ تم نسخ الكلام!")
 
-if run:
-    st.info("يجري الجمع ... يرجى الانتظار قليلاً حسب عدد الصفحات")
-    addons = collect_unreal_marketplace(int(pages))
-    st.success(f"تم جمع {len(addons)} عنصر/إضافة بنجاح!")
-    if addons:
-        st.write("أمثلة من النتائج:")
-        st.write(list(sorted(addons))[:30])
-        st.download_button(
-            label="تحميل القائمة كملف نصي",
-            data="\n".join(sorted(addons)),
-            file_name="unreal_marketplace_addons.txt",
-            mime="text/plain"
-        )
+    st.text_area("🗣️ النص الأصلي:", original_text)
+
+    # ترجمة بسيطة
+    from googletrans import Translator
+    translator = Translator()
+    translated = translator.translate(original_text, dest='ar')
+    arabic_text = translated.text
+    st.text_area("🌍 الترجمة العربية:", arabic_text)
+
+    # تحويل إلى صوت
+    tts = gTTS(arabic_text, lang='ar')
+    tts.save("arabic_audio.mp3")
+
+    # تركيب الصوت الجديد على الفيديو
+    st.info("🎛️ جاري دمج الصوت الجديد...")
+    video = VideoFileClip("input_video.mp4")
+    audio = AudioFileClip("arabic_audio.mp3")
+    final_video = video.set_audio(audio)
+    final_video.write_videofile("output_video.mp4", codec="libx264", audio_codec="aac")
+
+    st.success("🎉 فيديوك المدبلج جاهز!")
+    st.video("output_video.mp4")
+    with open("output_video.mp4", "rb") as f:
+        st.download_button("⬇️ تحميل الفيديو المدبلج", f, file_name="dubbed_video.mp4")
