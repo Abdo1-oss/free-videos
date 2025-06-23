@@ -7,6 +7,7 @@ from pydub import AudioSegment, silence
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
 )
+from moviepy.video.fx.all import blur  # لإضافة تأثير الضباب
 
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
@@ -54,8 +55,15 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
-st.set_page_config(page_title="فيديو قرآن شورتس بدون كتابة", layout="centered")
-st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية وصوت القارئ فقط")
+# إضافة تأثير صدى (Echo) بسيط
+def add_echo(sound, delay=250, attenuation=0.6):
+    echo = sound - 20
+    for i in range(1, 5):
+        echo = echo.overlay(sound - int(20 + i*10), position=i*delay)
+    return sound.overlay(echo)
+
+st.set_page_config(page_title="فيديو قرآن شورتس بتأثيرات", layout="centered")
+st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية وصوت القارئ وتأثيرات")
 
 qari_names = [q["name"] for q in QURAA]
 selected_qari_idx = st.selectbox("اختر القارئ:", options=range(len(qari_names)), format_func=lambda i: qari_names[i])
@@ -69,6 +77,9 @@ with col1:
     from_ayah = st.number_input("من الآية رقم:", min_value=1, max_value=ayah_count, value=1)
 with col2:
     to_ayah = st.number_input("إلى الآية رقم:", min_value=from_ayah, max_value=ayah_count, value=from_ayah)
+
+add_blur = st.checkbox("تفعيل الضباب (Blur) على الفيديو؟", value=True)
+add_echo_effect = st.checkbox("تفعيل الصدى (Echo) على الصوت؟", value=True)
 
 if st.button("إنشاء الفيديو"):
     try:
@@ -86,6 +97,10 @@ if st.button("إنشاء الفيديو"):
                     segment = AudioSegment.from_mp3(temp_ayah_file.name)
                     segment = trim_silence(segment)
                     merged = segment if merged is None else merged + segment
+
+            # تأثير صدى
+            if add_echo_effect:
+                merged = add_echo(merged)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as merged_file:
                 merged.export(merged_file.name, format="mp3")
                 audio_path = merged_file.name
@@ -102,6 +117,8 @@ if st.button("إنشاء الفيديو"):
 
         st.info("جاري إنتاج الفيديو النهائي...")
         video_clip = VideoFileClip(bg_video_path).resize(newsize=(1080, 1920))
+        if add_blur:
+            video_clip = video_clip.fx(blur, size=15)
         audio_clip = AudioFileClip(audio_path)
         duration = audio_clip.duration
         if video_clip.duration < duration:
