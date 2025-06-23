@@ -1,7 +1,6 @@
 import PIL
 from PIL import Image
 
-# حل مشكلة ANTIALIAS مع Pillow 10+
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
@@ -140,13 +139,23 @@ if st.button("إنشاء الفيديو"):
 
         ayah_duration = duration / len(ayah_texts)
         clips = [video_clip.set_audio(audio_clip)]
+
+        # جرب خطوط مختلفة إذا الخط الافتراضي لم يظهر بشكل جيد
+        font_path = None  # ضع هنا مسار خط ttf إذا كان متوفراً
+
         for i, text in enumerate(ayah_texts):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
-            txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
-                        font='Arial',  # استخدم خط متوفر على جهازك
-                        bg_color='black', method='text')
-                        .set_position(('center', 'bottom')).set_start(start).set_end(end))
+            try:
+                txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
+                            font=font_path if font_path else 'Arial',
+                            bg_color='black', method='text')
+                            .set_position(('center', 'bottom')).set_start(start).set_end(end))
+            except Exception as txt_err:
+                # fallback إلى الخط الافتراضي إذا لم يوجد Arial
+                txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
+                            bg_color='black', method='text')
+                            .set_position(('center', 'bottom')).set_start(start).set_end(end))
             clips.append(txt_clip)
         final = CompositeVideoClip(clips, size=(1080,1920)).set_duration(duration)
         output_path = "quran_shorts.mp4"
