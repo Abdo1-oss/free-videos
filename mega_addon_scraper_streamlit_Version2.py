@@ -34,13 +34,21 @@ if st.button("إنشاء الفيديو"):
     with st.spinner("جاري تحميل الصوت من يوتيوب..."):
         try:
             yt = YouTube(video_url)
+            # حاول أولاً بصيغة webm
             audio_stream = yt.streams.filter(only_audio=True, file_extension='webm').first()
+            audio_suffix = ".webm"
             if not audio_stream:
+                # جرّب بصيغة m4a
+                audio_stream = yt.streams.filter(only_audio=True, file_extension='m4a').first()
+                audio_suffix = ".m4a"
+            if not audio_stream:
+                # جرّب أي صوت متاح
                 audio_stream = yt.streams.filter(only_audio=True).first()
+                audio_suffix = ".mp3"
             if not audio_stream:
                 st.error("لم يتم العثور على مسار صوتي مناسب.")
                 st.stop()
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as audio_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=audio_suffix) as audio_file:
                 audio_stream.download(filename=audio_file.name)
                 audio_path = audio_file.name
         except Exception as e:
