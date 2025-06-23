@@ -1,6 +1,4 @@
-openai-whisper
-moviepy==1.0.3
-gtts
-googletrans==4.0.0rc1
-ffmpeg-python
-streamlit
+python-telegram-bot
+yt-dlp
+moviepy
+requests
