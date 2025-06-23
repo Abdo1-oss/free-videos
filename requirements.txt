@@ -1,4 +1,4 @@
 streamlit
-yt-dlp
+pytube
 moviepy==1.0.3
 requests
