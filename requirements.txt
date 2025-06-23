@@ -3,3 +3,4 @@ moviepy==1.0.3
 pydub
 requests
 ffmpeg
+OpenCV
