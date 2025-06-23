@@ -45,11 +45,10 @@ def get_ayah_texts(sura, from_ayah, to_ayah):
     resp = requests.get(url)
     if resp.status_code != 200:
         return [""] * (to_ayah - from_ayah + 1)
-    verses = resp.json()['verses']
+    verses = resp.json().get('verses', [])
     texts = []
     for v in verses:
         try:
-            # verse_key مثل "2:5"
             sura_num, ayah_num = map(int, v['verse_key'].split(':'))
         except Exception:
             continue
