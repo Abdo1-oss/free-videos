@@ -42,15 +42,35 @@ def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
     duration = len(audio_segment)
     return audio_segment[start_trim:duration-end_trim]
 
+# دالة جلب فيديو طبيعة بدون أشخاص
 def get_random_nature_video_url():
     headers = {"Authorization": PEXELS_API_KEY}
-    params = {"query": "nature", "per_page": 30}
+    params = {"query": "nature", "per_page": 40}
     resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
     resp.raise_for_status()
     videos = resp.json().get('videos', [])
     if not videos:
         raise Exception("لم يتم العثور على فيديوهات طبيعة!")
-    video = random.choice(videos)
+    
+    # كلمات تدل على وجود أشخاص
+    people_keywords = [
+        "person", "people", "man", "woman", "boy", "girl", "child", "men", "women", "kids", "kid", "human", "face", "portrait", "selfie"
+    ]
+    
+    # فلترة الفيديوهات التي لا تحتوي على أشخاص في التاجز أو الوصف أو اسم المستخدم
+    safe_videos = []
+    for video in videos:
+        tags = [t.lower() for t in video.get("tags", [])]
+        desc = (video.get("description", "") or "").lower()
+        user_name = (video.get("user", {}).get("name", "") or "").lower()
+        # النص المدمج للبحث عن الكلمات
+        text = " ".join(tags) + " " + desc + " " + user_name
+        if not any(word in text for word in people_keywords):
+            safe_videos.append(video)
+    
+    if not safe_videos:
+        raise Exception("لم يتم العثور على فيديوهات طبيعة بدون أشخاص! حاول لاحقًا.")
+    video = random.choice(safe_videos)
     for f in video["video_files"]:
         if f["quality"] == "hd" and f["width"] <= 1280:
             return f["link"]
