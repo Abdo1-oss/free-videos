@@ -1,3 +1,5 @@
+import streamlit as st
+import threading
 import os
 import requests
 from telegram import Update
