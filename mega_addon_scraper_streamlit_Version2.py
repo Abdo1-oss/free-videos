@@ -4,7 +4,7 @@ import tempfile
 import random
 import os
 from pydub import AudioSegment, silence
-from pydub.generators import Silence
+AudioSegment.silent(duration=3000)
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, concatenate_videoclips
 )
