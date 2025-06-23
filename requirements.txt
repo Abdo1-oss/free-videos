@@ -1,4 +1,5 @@
-python-telegram-bot
+streamlit
 yt-dlp
-moviepy==1.0.3
+moviepy
 requests
+python-telegram-bot
