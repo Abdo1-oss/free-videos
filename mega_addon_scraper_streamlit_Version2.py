@@ -12,9 +12,8 @@ import random
 import os
 from pydub import AudioSegment, silence
 from pydub.generators import Silence
-from moviepy.editor import (
-    VideoFileClip, AudioFileClip, concatenate_videoclips
-)
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+
 import cv2
 
 # ------------ إعدادات API KEYS ------------
