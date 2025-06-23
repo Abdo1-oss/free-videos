@@ -6,7 +6,7 @@ import yt_dlp
 import moviepy.editor as mp
 
 # استخدم متغير البيئة لحماية التوكن
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7558390969:AAHJFZ-yOSvfSdG4CMEQrlb6sgHL8ydrxOo")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7843765684:AAFd4rnJ1m2ryGXPgnJhO9hUfsSvs6z1ito")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i")
 
 DOWNLOAD_DIR = "downloads"
