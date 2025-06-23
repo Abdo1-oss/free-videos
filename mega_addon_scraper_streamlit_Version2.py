@@ -5,9 +5,8 @@ import random
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip, concatenate_videoclips
+    VideoFileClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
 )
-from PIL import Image, ImageDraw, ImageFont
 
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
@@ -35,31 +34,11 @@ SURA_AYAHS = [
 
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 
-font_path = "Amiri-Regular.ttf"  # ضع ملف الخط العربي بجانب الكود
-
 def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
     start_trim = silence.detect_leading_silence(audio_segment, silence_thresh, chunk_size)
     end_trim = silence.detect_leading_silence(audio_segment.reverse(), silence_thresh, chunk_size)
     duration = len(audio_segment)
     return audio_segment[start_trim:duration-end_trim]
-
-def get_ayah_texts(sura, from_ayah, to_ayah):
-    url = f"https://api.quran.com/api/v4/quran/verses/uthmani?chapter_number={sura}"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        return [""] * (to_ayah - from_ayah + 1)
-    verses = resp.json().get('verses', [])
-    ayah_dict = {}
-    for v in verses:
-        try:
-            sura_num, ayah_num = map(int, v['verse_key'].split(':'))
-            ayah_dict[ayah_num] = v['text_uthmani']
-        except Exception:
-            continue
-    texts = []
-    for ayah in range(from_ayah, to_ayah+1):
-        texts.append(ayah_dict.get(ayah, ""))
-    return texts
 
 def get_random_nature_video_url():
     headers = {"Authorization": PEXELS_API_KEY}
@@ -75,18 +54,8 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
-def make_text_image(text, size=(1000, 200), bgcolor=(0,0,0), color=(255,255,255), font_path="Amiri-Regular.ttf", fontsize=60):
-    img = Image.new("RGB", size, bgcolor)
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(font_path, fontsize)
-    w, h = draw.textsize(text, font=font)
-    draw.text(((size[0]-w)//2, (size[1]-h)//2), text, fill=color, font=font, align='center')
-    temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    img.save(temp_img.name)
-    return temp_img.name
-
-st.set_page_config(page_title="فيديو قرآن شورتس مع نص الآيات", layout="centered")
-st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية ونص الآيات")
+st.set_page_config(page_title="فيديو قرآن شورتس بدون كتابة", layout="centered")
+st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية وصوت القارئ فقط")
 
 qari_names = [q["name"] for q in QURAA]
 selected_qari_idx = st.selectbox("اختر القارئ:", options=range(len(qari_names)), format_func=lambda i: qari_names[i])
@@ -121,9 +90,6 @@ if st.button("إنشاء الفيديو"):
                 merged.export(merged_file.name, format="mp3")
                 audio_path = merged_file.name
 
-        with st.spinner("جلب نصوص الآيات..."):
-            ayah_texts = get_ayah_texts(sura_idx, from_ayah, to_ayah)
-
         with st.spinner("تحميل فيديو الخلفية وتحويله لحجم شورتس..."):
             nature_video_url = get_random_nature_video_url()
             headers = {"User-Agent": "Mozilla/5.0"}
@@ -134,7 +100,7 @@ if st.button("إنشاء الفيديو"):
                         bg_file.write(chunk)
                 bg_video_path = bg_file.name
 
-        st.info("جاري إنتاج الفيديو النهائي وكتابة نصوص الآيات...")
+        st.info("جاري إنتاج الفيديو النهائي...")
         video_clip = VideoFileClip(bg_video_path).resize(newsize=(1080, 1920))
         audio_clip = AudioFileClip(audio_path)
         duration = audio_clip.duration
@@ -144,18 +110,7 @@ if st.button("إنشاء الفيديو"):
         else:
             video_clip = video_clip.subclip(0, duration)
 
-        ayah_duration = duration / len(ayah_texts)
-        clips = [video_clip.set_audio(audio_clip)]
-        for i, text in enumerate(ayah_texts):
-            start = i * ayah_duration
-            end = (i+1) * ayah_duration
-            img_path = make_text_image(text, size=(1000, 200), font_path=font_path, fontsize=60)
-            txt_clip = (ImageClip(img_path)
-                        .set_position(("center", "bottom"))
-                        .set_start(start).set_end(end)
-                        .set_duration(end - start))
-            clips.append(txt_clip)
-        final = CompositeVideoClip(clips, size=(1080,1920)).set_duration(duration)
+        final = video_clip.set_audio(audio_clip).set_duration(duration)
         output_path = "quran_shorts.mp4"
         final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
         st.success("تم إنشاء الفيديو بنجاح!")
