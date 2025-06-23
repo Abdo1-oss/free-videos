@@ -22,27 +22,26 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
+st.set_page_config(page_title="فيديو قرآن بخلفية طبيعية", layout="centered")
 st.title("أنشئ فيديو قرآن بخلفية طبيعية من يوتيوب (بدون FFmpeg)")
 
-video_url = st.text_input("ألصق رابط فيديو يوتيوب للقرآن:")
+# حقل واضح لإدخال الرابط
+video_url = st.text_input("ضع هنا رابط فيديو يوتيوب للقرآن:")
 
 if st.button("إنشاء الفيديو"):
-    if not video_url:
+    if not video_url.strip():
         st.warning("يرجى وضع رابط فيديو أولاً")
         st.stop()
 
     with st.spinner("جاري تحميل الصوت من يوتيوب..."):
         try:
             yt = YouTube(video_url)
-            # حاول أولاً بصيغة webm
             audio_stream = yt.streams.filter(only_audio=True, file_extension='webm').first()
             audio_suffix = ".webm"
             if not audio_stream:
-                # جرّب بصيغة m4a
                 audio_stream = yt.streams.filter(only_audio=True, file_extension='m4a').first()
                 audio_suffix = ".m4a"
             if not audio_stream:
-                # جرّب أي صوت متاح
                 audio_stream = yt.streams.filter(only_audio=True).first()
                 audio_suffix = ".mp3"
             if not audio_stream:
@@ -69,7 +68,6 @@ if st.button("إنشاء الفيديو"):
             st.error(f"حدث خطأ أثناء جلب فيديو الخلفية: {e}")
             st.stop()
 
-    # معالجة ودمج الصوت مع الخلفية
     try:
         st.info("جاري معالجة الصوت والفيديو...")
         audio_clip = AudioFileClip(audio_path)
