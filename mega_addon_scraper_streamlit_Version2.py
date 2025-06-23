@@ -1,6 +1,7 @@
 import PIL
 from PIL import Image
 
+# لضمان التوافق مع Pillow 10+
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
@@ -94,6 +95,14 @@ with col1:
 with col2:
     to_ayah = st.number_input("إلى الآية رقم:", min_value=from_ayah, max_value=ayah_count, value=from_ayah)
 
+uploaded_font = st.file_uploader("ارفع ملف الخط (TTF أو OTF) لعرض نص الآية بخطك المفضل", type=["ttf", "otf"])
+if uploaded_font:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".ttf") as tmp_font:
+        tmp_font.write(uploaded_font.read())
+        font_path = tmp_font.name
+else:
+    font_path = "Arial" # أو أي خط افتراضي متوفر
+
 if st.button("إنشاء الفيديو"):
     try:
         with st.spinner("جاري تحميل ودمج الصوت بدون فواصل..."):
@@ -140,19 +149,15 @@ if st.button("إنشاء الفيديو"):
         ayah_duration = duration / len(ayah_texts)
         clips = [video_clip.set_audio(audio_clip)]
 
-        # جرب خطوط مختلفة إذا الخط الافتراضي لم يظهر بشكل جيد
-        font_path = None  # ضع هنا مسار خط ttf إذا كان متوفراً
-
         for i, text in enumerate(ayah_texts):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
             try:
                 txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
-                            font=font_path if font_path else 'Arial',
+                            font=font_path,
                             bg_color='black', method='text')
                             .set_position(('center', 'bottom')).set_start(start).set_end(end))
             except Exception as txt_err:
-                # fallback إلى الخط الافتراضي إذا لم يوجد Arial
                 txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
                             bg_color='black', method='text')
                             .set_position(('center', 'bottom')).set_start(start).set_end(end))
