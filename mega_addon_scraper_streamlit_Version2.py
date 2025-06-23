@@ -1,95 +1,96 @@
 import streamlit as st
-import threading
-import os
-import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
-import moviepy.editor as mp
+import requests
+from moviepy.editor import AudioFileClip, VideoFileClip, CompositeVideoClip
+import tempfile
+import os
+import random
 
-# استخدم متغير البيئة لحماية التوكن
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7843765684:AAFd4rnJ1m2ryGXPgnJhO9hUfsSvs6z1ito")
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i")
+PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i" 
 
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+def get_random_nature_video_url():
+    headers = {"Authorization": PEXELS_API_KEY}
+    params = {"query": "nature", "per_page": 30}
+    resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
+    resp.raise_for_status()
+    videos = resp.json().get('videos', [])
+    if not videos:
+        raise Exception("لم يتم العثور على فيديوهات طبيعة!")
+    video = random.choice(videos)
+    # نأخذ نسخة متوسطة الجودة
+    for f in video["video_files"]:
+        if f["quality"] == "hd" and f["width"] <= 1280:
+            return f["link"]
+    return video["video_files"][0]["link"]
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "مرحباً! أرسل لي رابط فيديو قرآن الكريم (من يوتيوب أو ما شابه)، وسأرسل لك فيديو مناظر طبيعية بنفس الصوت."
-    )
+st.set_page_config(page_title="إنشاء فيديو قرآن بخلفية طبيعية", layout="centered")
+st.title("إنشاء فيديو قرآن بخلفية طبيعية متغيرة (من رابط يوتيوب)")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text.strip()
-    video_path = os.path.join(DOWNLOAD_DIR, "input.mp4")
-    audio_path = os.path.join(DOWNLOAD_DIR, "audio.mp3")
+video_url = st.text_input("ألصق رابط فيديو القرآن من يوتيوب:")
 
-    await update.message.reply_text("جاري تحميل الفيديو واستخراج الصوت...")
+if st.button("إنشاء الفيديو"):
+    if not video_url:
+        st.warning("يرجى وضع رابط فيديو أولاً")
+        st.stop()
 
-    # تحميل الفيديو
-    try:
-        ydl_opts = {"outtmpl": video_path, "format": "bestvideo+bestaudio/best"}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    except Exception as e:
-        await update.message.reply_text(f"حدث خطأ أثناء تحميل الفيديو: {e}")
-        return
+    with st.spinner("جاري تحميل فيديو الطبيعة..."):
+        try:
+            nature_video_url = get_random_nature_video_url()
+            bg_resp = requests.get(nature_video_url, stream=True)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as bg_file:
+                for chunk in bg_resp.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        bg_file.write(chunk)
+                bg_video_path = bg_file.name
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء جلب فيديو الطبيعة: {e}")
+            st.stop()
 
-    # استخراج الصوت
-    try:
-        video = mp.VideoFileClip(video_path)
-        video.audio.write_audiofile(audio_path)
-    except Exception as e:
-        await update.message.reply_text(f"حدث خطأ أثناء استخراج الصوت: {e}")
-        return
+    with st.spinner("جاري تحميل الصوت من يوتيوب..."):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': f'{tmpdir}/audio.%(ext)s',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+            }
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([video_url])
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء تحميل الصوت: {e}")
+                st.stop()
 
-    await update.message.reply_text("تم استخراج الصوت بنجاح ✅\nجاري جلب فيديو خلفية من مناظر طبيعية...")
+            audio_path = None
+            for file in os.listdir(tmpdir):
+                if file.endswith(".mp3"):
+                    audio_path = os.path.join(tmpdir, file)
+            if audio_path is None:
+                st.error("لم يتم العثور على ملف الصوت!")
+                st.stop()
 
-    # جلب فيديو مناظر طبيعية من Pexels
-    bg_video_url = get_nature_video_url()
-    if not bg_video_url:
-        await update.message.reply_text("تعذر الحصول على فيديو خلفية من Pexels.")
-        return
+            st.info("جاري إنشاء الفيديو النهائي...")
+            audio_clip = AudioFileClip(audio_path)
+            duration = audio_clip.duration
 
-    # إرسال النتائج للمستخدم
-    await update.message.reply_text(
-        f"رابط فيديو الخلفية من Pexels:\n{bg_video_url}\n\n"
-        f"تم استخراج الصوت من الفيديو الذي أرسلته ويمكنك تحميله من هنا:"
-    )
-    try:
-        with open(audio_path, "rb") as audio_file:
-            await update.message.reply_audio(audio_file)
-    except Exception:
-        await update.message.reply_text("تعذر إرسال ملف الصوت، لكنه محفوظ على السيرفر.")
+            # قص أو كرر فيديو الطبيعة ليطابق مدة الصوت
+            bg_clip = VideoFileClip(bg_video_path)
+            if bg_clip.duration >= duration:
+                bg_clip = bg_clip.subclip(0, duration)
+            else:
+                # كرر الفيديو ليصل لنفس مدة الصوت
+                loops = int(duration // bg_clip.duration) + 1
+                bg_clip = concatenate_videoclips([bg_clip] * loops).subclip(0, duration)
 
-    await update.message.reply_text(
-        "يمكنك دمج الصوت بالفيديو باستخدام خدمات أونلاين مثل [clideo.com/merge-video](https://clideo.com/merge-video) أو [online-convert.com](https://video.online-convert.com/convert-to-mp4) أو عبر أي محرر فيديو."
-    )
+            final_clip = bg_clip.set_audio(audio_clip)
+            output_video_path = os.path.join(tmpdir, "output.mp4")
+            final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac", fps=24)
 
-def get_nature_video_url():
-    headers = {'Authorization': PEXELS_API_KEY}
-    params = {'query': 'nature', 'per_page': 1}
-    response = requests.get(
-        'https://api.pexels.com/videos/search', headers=headers, params=params
-    )
-    if response.status_code == 200:
-        data = response.json()
-        if data['videos']:
-            # نختار جودة HD إن توفرت
-            for file in data['videos'][0]['video_files']:
-                if file['quality'] == 'hd':
-                    return file['link']
-            return data['videos'][0]['video_files'][0]['link']
-    return None
-
-import threading
-
-def start_bot():
-    app.run_polling()
-
-if 'bot_thread' not in st.session_state:
-    bot_thread = threading.Thread(target=start_bot, daemon=True)
-    bot_thread.start()
-    st.session_state['bot_thread'] = bot_thread
-
-st.success("بوت تيليجرام يعمل في الخلفية ✅")
+            st.success("تم إنشاء الفيديو بنجاح!")
+            with open(output_video_path, "rb") as f:
+                st.download_button("تحميل الفيديو الجديد", f, file_name="quran_with_nature.mp4", mime="video/mp4")
+            st.video(output_video_path)
