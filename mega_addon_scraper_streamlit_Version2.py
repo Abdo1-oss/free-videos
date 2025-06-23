@@ -144,7 +144,8 @@ if st.button("إنشاء الفيديو"):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
             txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
-                        font='Amiri-Bold', bg_color='rgba(0,0,0,0.4)', method='caption')
+                        font='Arial',  # استخدم خط متوفر على جهازك
+                        bg_color='black', method='text')
                         .set_position(('center', 'bottom')).set_start(start).set_end(end))
             clips.append(txt_clip)
         final = CompositeVideoClip(clips, size=(1080,1920)).set_duration(duration)
