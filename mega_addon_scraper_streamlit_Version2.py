@@ -1,10 +1,3 @@
-import PIL
-from PIL import Image
-
-# دعم Pillow 10+
-if not hasattr(Image, 'ANTIALIAS'):
-    Image.ANTIALIAS = Image.Resampling.LANCZOS
-
 import streamlit as st
 import requests
 import tempfile
@@ -12,8 +5,9 @@ import random
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, concatenate_videoclips
+    VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip, concatenate_videoclips
 )
+from PIL import Image, ImageDraw, ImageFont
 
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
@@ -40,6 +34,8 @@ SURA_AYAHS = [
 ]
 
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
+
+font_path = "Amiri-Regular.ttf"  # ضع ملف الخط العربي بجانب الكود
 
 def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
     start_trim = silence.detect_leading_silence(audio_segment, silence_thresh, chunk_size)
@@ -79,6 +75,16 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
+def make_text_image(text, size=(1000, 200), bgcolor=(0,0,0), color=(255,255,255), font_path="Amiri-Regular.ttf", fontsize=60):
+    img = Image.new("RGB", size, bgcolor)
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype(font_path, fontsize)
+    w, h = draw.textsize(text, font=font)
+    draw.text(((size[0]-w)//2, (size[1]-h)//2), text, fill=color, font=font, align='center')
+    temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    img.save(temp_img.name)
+    return temp_img.name
+
 st.set_page_config(page_title="فيديو قرآن شورتس مع نص الآيات", layout="centered")
 st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية ونص الآيات")
 
@@ -94,14 +100,6 @@ with col1:
     from_ayah = st.number_input("من الآية رقم:", min_value=1, max_value=ayah_count, value=1)
 with col2:
     to_ayah = st.number_input("إلى الآية رقم:", min_value=from_ayah, max_value=ayah_count, value=from_ayah)
-
-uploaded_font = st.file_uploader("ارفع ملف الخط (TTF أو OTF) لعرض نص الآية بخطك المفضل (اختياري)", type=["ttf", "otf"])
-if uploaded_font:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".ttf") as tmp_font:
-        tmp_font.write(uploaded_font.read())
-        font_path = tmp_font.name
-else:
-    font_path = "Arial" # أو أي خط افتراضي متوفر
 
 if st.button("إنشاء الفيديو"):
     try:
@@ -151,25 +149,11 @@ if st.button("إنشاء الفيديو"):
         for i, text in enumerate(ayah_texts):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
-            try:
-                txt_clip = (TextClip(
-                    text,
-                    fontsize=60,
-                    color='white',
-                    size=(1000, 200),
-                    font=font_path,
-                    bg_color='black',
-                    method='text'
-                ).set_position(('center', 'bottom')).set_start(start).set_end(end))
-            except Exception as txt_err:
-                txt_clip = (TextClip(
-                    text,
-                    fontsize=60,
-                    color='white',
-                    size=(1000, 200),
-                    bg_color='black',
-                    method='text'
-                ).set_position(('center', 'bottom')).set_start(start).set_end(end))
+            img_path = make_text_image(text, size=(1000, 200), font_path=font_path, fontsize=60)
+            txt_clip = (ImageClip(img_path)
+                        .set_position(("center", "bottom"))
+                        .set_start(start).set_end(end)
+                        .set_duration(end - start))
             clips.append(txt_clip)
         final = CompositeVideoClip(clips, size=(1080,1920)).set_duration(duration)
         output_path = "quran_shorts.mp4"
