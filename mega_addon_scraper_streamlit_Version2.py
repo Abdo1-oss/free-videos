@@ -1,7 +1,7 @@
 import PIL
 from PIL import Image
 
-# لضمان التوافق مع Pillow 10+
+# دعم Pillow 10+
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
@@ -53,16 +53,16 @@ def get_ayah_texts(sura, from_ayah, to_ayah):
     if resp.status_code != 200:
         return [""] * (to_ayah - from_ayah + 1)
     verses = resp.json().get('verses', [])
-    texts = []
+    ayah_dict = {}
     for v in verses:
         try:
             sura_num, ayah_num = map(int, v['verse_key'].split(':'))
+            ayah_dict[ayah_num] = v['text_uthmani']
         except Exception:
             continue
-        if from_ayah <= ayah_num <= to_ayah:
-            texts.append(v['text_uthmani'])
-    while len(texts) < (to_ayah - from_ayah + 1):
-        texts.append("")
+    texts = []
+    for ayah in range(from_ayah, to_ayah+1):
+        texts.append(ayah_dict.get(ayah, ""))
     return texts
 
 def get_random_nature_video_url():
@@ -95,7 +95,7 @@ with col1:
 with col2:
     to_ayah = st.number_input("إلى الآية رقم:", min_value=from_ayah, max_value=ayah_count, value=from_ayah)
 
-uploaded_font = st.file_uploader("ارفع ملف الخط (TTF أو OTF) لعرض نص الآية بخطك المفضل", type=["ttf", "otf"])
+uploaded_font = st.file_uploader("ارفع ملف الخط (TTF أو OTF) لعرض نص الآية بخطك المفضل (اختياري)", type=["ttf", "otf"])
 if uploaded_font:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".ttf") as tmp_font:
         tmp_font.write(uploaded_font.read())
@@ -148,7 +148,6 @@ if st.button("إنشاء الفيديو"):
 
         ayah_duration = duration / len(ayah_texts)
         clips = [video_clip.set_audio(audio_clip)]
-
         for i, text in enumerate(ayah_texts):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
