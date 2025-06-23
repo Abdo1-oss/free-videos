@@ -152,14 +152,24 @@ if st.button("إنشاء الفيديو"):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
             try:
-                txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
-                            font=font_path,
-                            bg_color='black', method='text')
-                            .set_position(('center', 'bottom')).set_start(start).set_end(end))
+                txt_clip = (TextClip(
+                    text,
+                    fontsize=60,
+                    color='white',
+                    size=(1000, 200),
+                    font=font_path,
+                    bg_color='black',
+                    method='text'
+                ).set_position(('center', 'bottom')).set_start(start).set_end(end))
             except Exception as txt_err:
-                txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
-                            bg_color='black', method='text')
-                            .set_position(('center', 'bottom')).set_start(start).set_end(end))
+                txt_clip = (TextClip(
+                    text,
+                    fontsize=60,
+                    color='white',
+                    size=(1000, 200),
+                    bg_color='black',
+                    method='text'
+                ).set_position(('center', 'bottom')).set_start(start).set_end(end))
             clips.append(txt_clip)
         final = CompositeVideoClip(clips, size=(1080,1920)).set_duration(duration)
         output_path = "quran_shorts.mp4"
