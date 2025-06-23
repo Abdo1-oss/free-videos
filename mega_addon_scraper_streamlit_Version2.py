@@ -5,7 +5,7 @@ import random
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
+    VideoFileClip, AudioFileClip, concatenate_videoclips
 )
 import cv2
 import numpy as np
@@ -42,8 +42,8 @@ def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
     duration = len(audio_segment)
     return audio_segment[start_trim:duration-end_trim]
 
-# دالة جلب فيديو طبيعة بدون أشخاص
-def get_random_nature_video_url():
+# دالة جلب أكثر من فيديو طبيعة بدون أشخاص
+def get_multiple_nature_videos(total_duration):
     headers = {"Authorization": PEXELS_API_KEY}
     params = {"query": "nature", "per_page": 40}
     resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
@@ -52,38 +52,55 @@ def get_random_nature_video_url():
     if not videos:
         raise Exception("لم يتم العثور على فيديوهات طبيعة!")
     
-    # كلمات تدل على وجود أشخاص
     people_keywords = [
         "person", "people", "man", "woman", "boy", "girl", "child", "men", "women", "kids", "kid", "human", "face", "portrait", "selfie"
     ]
     
-    # فلترة الفيديوهات التي لا تحتوي على أشخاص في التاجز أو الوصف أو اسم المستخدم
     safe_videos = []
     for video in videos:
         tags = [t.lower() for t in video.get("tags", [])]
         desc = (video.get("description", "") or "").lower()
         user_name = (video.get("user", {}).get("name", "") or "").lower()
-        # النص المدمج للبحث عن الكلمات
         text = " ".join(tags) + " " + desc + " " + user_name
         if not any(word in text for word in people_keywords):
-            safe_videos.append(video)
-    
+            for f in video["video_files"]:
+                if f["quality"] == "hd" and f["width"] <= 1280:
+                    safe_videos.append(f["link"])
+                    break
+            else:
+                safe_videos.append(video["video_files"][0]["link"])
     if not safe_videos:
         raise Exception("لم يتم العثور على فيديوهات طبيعة بدون أشخاص! حاول لاحقًا.")
-    video = random.choice(safe_videos)
-    for f in video["video_files"]:
-        if f["quality"] == "hd" and f["width"] <= 1280:
-            return f["link"]
-    return video["video_files"][0]["link"]
+    
+    # تحميل فيديوهات مختلفة حتى نغطي مدة الصوت
+    temp_video_files = []
+    downloaded_links = set()
+    downloaded_duration = 0.0
+    while downloaded_duration < total_duration and safe_videos:
+        link = random.choice(safe_videos)
+        if link in downloaded_links:
+            safe_videos.remove(link)
+            continue
+        headers = {"User-Agent": "Mozilla/5.0"}
+        bg_resp = requests.get(link, stream=True, headers=headers)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as bg_file:
+            for chunk in bg_resp.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    bg_file.write(chunk)
+            temp_video_files.append(bg_file.name)
+            clip = VideoFileClip(bg_file.name)
+            downloaded_duration += clip.duration
+            downloaded_links.add(link)
+    if downloaded_duration < total_duration:
+        raise Exception("لم يتم العثور على فيديوهات كافية لتغطية مدة الصوت. حاول مجددًا.")
+    return temp_video_files
 
-# تأثير صدى (Echo) بسيط
 def add_echo(sound, delay=250, attenuation=0.6):
     echo = sound - 20
     for i in range(1, 5):
         echo = echo.overlay(sound - int(20 + i*10), position=i*delay)
     return sound.overlay(echo)
 
-# دالة الضباب باستخدام OpenCV
 def blur_frame(img, ksize=15):
     return cv2.GaussianBlur(img, (ksize|1, ksize|1), 0)
 
@@ -123,36 +140,30 @@ if st.button("إنشاء الفيديو"):
                     segment = trim_silence(segment)
                     merged = segment if merged is None else merged + segment
 
-            # تأثير صدى
             if add_echo_effect:
                 merged = add_echo(merged)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as merged_file:
                 merged.export(merged_file.name, format="mp3")
                 audio_path = merged_file.name
 
-        with st.spinner("تحميل فيديو الخلفية وتحويله لحجم شورتس..."):
-            nature_video_url = get_random_nature_video_url()
-            headers = {"User-Agent": "Mozilla/5.0"}
-            bg_resp = requests.get(nature_video_url, stream=True, headers=headers)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as bg_file:
-                for chunk in bg_resp.iter_content(chunk_size=1024*1024):
-                    if chunk:
-                        bg_file.write(chunk)
-                bg_video_path = bg_file.name
-
-        st.info("جاري إنتاج الفيديو النهائي...")
-        video_clip = VideoFileClip(bg_video_path).resize(newsize=(1080, 1920))
-        if add_blur:
-            video_clip = video_clip.fl_image(lambda image: blur_frame(image, ksize=15))
         audio_clip = AudioFileClip(audio_path)
         duration = audio_clip.duration
-        if video_clip.duration < duration:
-            loops = int(duration // video_clip.duration) + 1
-            video_clip = concatenate_videoclips([video_clip] * loops).subclip(0, duration)
-        else:
-            video_clip = video_clip.subclip(0, duration)
 
-        final = video_clip.set_audio(audio_clip).set_duration(duration)
+        with st.spinner("جاري تحميل وتجهيز فيديوهات الخلفية..."):
+            video_files = get_multiple_nature_videos(duration)
+            video_clips = []
+            accumulated = 0.0
+            for vpath in video_files:
+                clip = VideoFileClip(vpath).resize(newsize=(1080, 1920))
+                if add_blur:
+                    clip = clip.fl_image(lambda image: blur_frame(image, ksize=15))
+                video_clips.append(clip)
+                accumulated += clip.duration
+                if accumulated >= duration:
+                    break
+            final_video = concatenate_videoclips(video_clips).subclip(0, duration)
+
+        final = final_video.set_audio(audio_clip).set_duration(duration)
         output_path = "quran_shorts.mp4"
         final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
         st.success("تم إنشاء الفيديو بنجاح!")
