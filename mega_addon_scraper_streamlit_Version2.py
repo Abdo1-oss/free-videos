@@ -1,3 +1,10 @@
+import PIL
+from PIL import Image
+
+# حل مشكلة ANTIALIAS مع Pillow 10+
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+
 import streamlit as st
 import requests
 import tempfile
