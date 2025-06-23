@@ -2,10 +2,9 @@ import streamlit as st
 import requests
 import tempfile
 import random
-import os
 from moviepy.editor import AudioFileClip, VideoFileClip, concatenate_videoclips
 
-# بيانات السور وأرقامها
+# بيانات السور
 SURA_NAMES = [
     "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام", "الأعراف", "الأنفال", "التوبة", "يونس", "هود", "يوسف", "الرعد",
     "إبراهيم", "الحجر", "النحل", "الإسراء", "الكهف", "مريم", "طه", "الأنبياء", "الحج", "المؤمنون", "النور", "الفرقان", "الشعراء",
@@ -18,25 +17,20 @@ SURA_NAMES = [
     "الهمزة", "الفيل", "قريش", "الماعون", "الكوثر", "الكافرون", "النصر", "المسد", "الإخلاص", "الفلق", "الناس"
 ]
 
-# فقط الحصري المرتل مع بيانات توقيت
-QARI_SERVER = "https://verses.quran.com/Abdul_Basit_Murattal_64kbps"
-QARI_NAME = "عبدالباسط عبدالصمد (مرتل)"
+PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 
-# API توقيت الآيات من quran.com (لكل سورة)
 def get_timings(sura_number):
     url = f"https://verses.quran.com/Abdul_Basit_Murattal_64kbps/{sura_number:03d}.timings"
     resp = requests.get(url)
-    resp.raise_for_status()
+    if resp.status_code != 200:
+        raise Exception("بيانات توقيت الآيات غير متوفرة لهذه السورة. جرب سورة أخرى.")
     timings = []
     for l in resp.text.strip().splitlines():
-        # كل سطر: ayah_number start_time end_time
         parts = l.strip().split()
         if len(parts) == 3:
             timings.append((int(parts[0]), float(parts[1]), float(parts[2])))
     return timings
 
-# فيديو الخلفية من pexels
-PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 def get_random_nature_video_url():
     headers = {"Authorization": PEXELS_API_KEY}
     params = {"query": "nature", "per_page": 30}
@@ -51,23 +45,27 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
-st.title("أنشئ فيديو قرآن من آية إلى آية في سورة مع خلفية طبيعية")
-sura_idx = st.selectbox("اختر السورة:", options=range(1, 115), format_func=lambda i: f"{i}. {SURA_NAMES[i-1]}")
-timings = get_timings(sura_idx)
-ayah_count = len(timings)
-st.write(f"عدد آيات السورة: {ayah_count}")
+st.set_page_config(page_title="فيديو قرآن من آية إلى آية", layout="centered")
+st.title("أنشئ فيديو قرآن بخلفية طبيعية (من آية إلى آية)")
 
-from_ayah = st.number_input("من الآية رقم", min_value=1, max_value=ayah_count, value=1)
-to_ayah = st.number_input("إلى الآية رقم", min_value=from_ayah, max_value=ayah_count, value=ayah_count)
+sura_idx = st.selectbox("اختر السورة:", options=range(1, 115), format_func=lambda i: f"{i}. {SURA_NAMES[i-1]}")
+try:
+    timings = get_timings(sura_idx)
+    ayah_count = len(timings)
+except Exception as e:
+    st.error(str(e))
+    st.stop()
+
+from_ayah = st.number_input("من الآية رقم:", min_value=1, max_value=ayah_count, value=1)
+to_ayah = st.number_input("إلى الآية رقم:", min_value=from_ayah, max_value=ayah_count, value=ayah_count)
 
 if st.button("إنشاء الفيديو"):
-    # 1. حمل ملف السورة كاملًا
-    audio_url = f"{QARI_SERVER}/{sura_idx:03d}.mp3"
-    with st.spinner("جاري تحميل الصوت..."):
+    audio_url = f"https://verses.quran.com/Abdul_Basit_Murattal_64kbps/{sura_idx:03d}.mp3"
+    with st.spinner("جاري تحميل ملف السورة الصوتي..."):
         try:
             audio_resp = requests.get(audio_url, stream=True)
             if audio_resp.status_code != 200:
-                st.error("تعذر تحميل ملف الصوت! تحقق من الرابط.")
+                st.error("تعذر تحميل ملف الصوت! جرب سورة أخرى.")
                 st.stop()
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
                 for chunk in audio_resp.iter_content(chunk_size=1024*1024):
@@ -77,11 +75,11 @@ if st.button("إنشاء الفيديو"):
         except Exception as e:
             st.error(f"حدث خطأ أثناء تحميل الصوت: {e}")
             st.stop()
-    # 2. استخراج المقطع المطلوب
+    # استخراج المقطع
     try:
-        st.info("جاري استخراج المقطع الصوتي...")
+        st.info("جاري استخراج المقطع الصوتي للآيات المطلوبة...")
         audio_clip = AudioFileClip(audio_path)
-        # timings: list of (ayah_number, start, end)
+        # timings: (ayah_number, start, end)
         start_sec = None
         end_sec = None
         for ayah, start, end in timings:
@@ -96,7 +94,7 @@ if st.button("إنشاء الفيديو"):
     except Exception as e:
         st.error(f"حدث خطأ أثناء استخراج المقطع: {e}")
         st.stop()
-    # 3. تحميل فيديو الخلفية
+    # تحميل فيديو الخلفية
     with st.spinner("جاري تحميل فيديو الخلفية الطبيعية..."):
         try:
             nature_video_url = get_random_nature_video_url()
@@ -110,9 +108,9 @@ if st.button("إنشاء الفيديو"):
         except Exception as e:
             st.error(f"حدث خطأ أثناء جلب فيديو الخلفية: {e}")
             st.stop()
-    # 4. دمج الصوت مع الخلفية
+    # دمج الصوت مع الخلفية
     try:
-        st.info("جاري تركيب الصوت على الخلفية الطبيعية...")
+        st.info("جاري دمج الصوت مع الفيديو...")
         duration = ayat_clip.duration
         bg_clip = VideoFileClip(bg_video_path)
         if bg_clip.duration >= duration:
@@ -126,7 +124,7 @@ if st.button("إنشاء الفيديو"):
         final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac", fps=24)
         st.success("تم إنشاء الفيديو بنجاح!")
         with open(output_video_path, "rb") as f:
-            st.download_button("تحميل الفيديو الجديد", f, file_name="quran_ayahs_with_nature.mp4", mime="video/mp4")
+            st.download_button("تحميل الفيديو الجديد", f, file_name="quran_ayat_with_nature.mp4", mime="video/mp4")
         st.video(output_video_path)
     except Exception as e:
         st.error(f"حدث خطأ أثناء إنشاء الفيديو: {e}")
