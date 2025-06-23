@@ -1,11 +1,12 @@
 import streamlit as st
-from moviepy.editor import AudioFileClip, VideoFileClip, concatenate_videoclips
-import tempfile
+import yt_dlp
 import requests
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+import tempfile
 import random
 import os
 
-# ضع مفتاح Pexels API هنا
+# ضع مفتاح Pexels API الخاص بك هنا
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 
 def get_random_nature_video_url():
@@ -24,29 +25,52 @@ def get_random_nature_video_url():
     return video["video_files"][0]["link"]
 
 st.set_page_config(page_title="فيديو قرآن بخلفية طبيعية", layout="centered")
-st.title("أنشئ فيديو قرآن بخلفية طبيعية متغيرة")
-
-st.markdown("""
-**الخطوات:**
-1. الصق رابط فيديو يوتيوب للقرآن في الحقل أدناه.
-2. اضغط على الزر لتحويل الفيديو إلى MP3 في موقع خارجي.
-3. بعد التحويل، قم بتنزيل ملف MP3 وارفعه هنا لإكمال صناعة الفيديو بالخلفية الطبيعية.
-""")
+st.title("أنشئ فيديو قرآن بخلفية طبيعية من رابط يوتيوب")
 
 video_url = st.text_input("ألصق رابط فيديو يوتيوب للقرآن:")
 
-if video_url:
-    # رابط إلى ytmp3.cc مع توضيح للمستخدم
-    st.markdown(
-        f"[اضغط هنا لتحويل رابط يوتيوب إلى MP3 (يفتح في نافذة جديدة)](https://ytmp3.cc/youtube-to-mp3/{video_url})"
-    )
-    st.info("بعد التحويل، قم بتنزيل ملف MP3 الناتج وارفعه بالأسفل.")
+if st.button("إنشاء الفيديو"):
+    if not video_url:
+        st.warning("يرجى وضع رابط فيديو أولاً")
+        st.stop()
 
-uploaded_file = st.file_uploader("ارفع ملف MP3 الناتج هنا", type=["mp3"])
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 1. تحميل الفيديو من يوتيوب
+        st.info("جاري تحميل الفيديو من يوتيوب...")
+        ydl_opts = {
+            'format': 'bestvideo+bestaudio/best',
+            'outtmpl': f'{tmpdir}/input.%(ext)s',
+            'quiet': True,
+            'merge_output_format': 'mp4',
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء تحميل الفيديو من يوتيوب: {e}")
+            st.stop()
 
-if uploaded_file:
-    st.success("تم رفع الملف بنجاح! يمكنك الآن متابعة صناعة الفيديو بالخلفية الطبيعية.")
-    if st.button("إنشاء الفيديو"):
+        # ابحث عن ملف الفيديو الذي تم تحميله
+        input_video_path = None
+        for file in os.listdir(tmpdir):
+            if file.endswith(".mp4"):
+                input_video_path = os.path.join(tmpdir, file)
+        if input_video_path is None:
+            st.error("لم يتم العثور على ملف الفيديو!")
+            st.stop()
+
+        # 2. استخراج الصوت من الفيديو
+        try:
+            st.info("جاري استخراج الصوت من الفيديو...")
+            video_clip = VideoFileClip(input_video_path)
+            audio_clip = video_clip.audio
+            duration = video_clip.duration
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء استخراج الصوت: {e}")
+            st.stop()
+
+        # 3. تحميل فيديو خلفية الطبيعة
         with st.spinner("جاري تحميل فيديو الخلفية الطبيعية..."):
             try:
                 nature_video_url = get_random_nature_video_url()
@@ -61,17 +85,11 @@ if uploaded_file:
                 st.error(f"حدث خطأ أثناء جلب فيديو الخلفية: {e}")
                 st.stop()
 
-        # حفظ ملف الصوت مؤقتًا
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-            audio_file.write(uploaded_file.read())
-            audio_path = audio_file.name
-
+        # 4. دمج الصوت مع خلفية الطبيعة
         try:
-            st.info("جاري معالجة الفيديو والصوت...")
-            audio_clip = AudioFileClip(audio_path)
-            duration = audio_clip.duration
+            st.info("جاري تركيب الصوت على الخلفية الطبيعية...")
             bg_clip = VideoFileClip(bg_video_path)
-            # إذا كانت الخلفية أقصر من الصوت، كرر الخلفية
+            # كرر الخلفية إذا كانت أقصر من الصوت
             if bg_clip.duration >= duration:
                 bg_clip = bg_clip.subclip(0, duration)
             else:
