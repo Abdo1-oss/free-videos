@@ -1,45 +1,54 @@
 import streamlit as st
-import whisper
-from moviepy.editor import VideoFileClip, AudioFileClip
-from gtts import gTTS
+import requests
+import yt_dlp
+import moviepy.editor as mp
 import os
+import uuid
 
-st.title("🎬 أداة دبلجة الفيديو بالذكاء الاصطناعي")
+# مفاتيح API
+PEXELS_API_KEY = "YOUR_PEXELS_API_KEY"
+DOWNLOAD_DIR = "downloads"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-uploaded_file = st.file_uploader("📤 ارفع الفيديو", type=["mp4", "mov", "avi"])
+st.set_page_config(page_title="مولد فيديو القرآن بخلفية طبيعية", layout="centered")
+st.title("🎬 مولد فيديو القرآن بخلفية مناظر طبيعية")
 
-if uploaded_file:
-    with open("input_video.mp4", "wb") as f:
-        f.write(uploaded_file.read())
-    st.video("input_video.mp4")
+video_url = st.text_input("أدخل رابط فيديو القرآن (يوتيوب أو غيره):")
 
-    st.info("⏳ جاري استخراج الصوت وتحويله لنص...")
-    model = whisper.load_model("base")
-    result = model.transcribe("input_video.mp4")
-    original_text = result["text"]
-    st.success("✅ تم نسخ الكلام!")
+if st.button("ابدأ المعالجة") and video_url:
+    st.info("جاري تحميل الفيديو...")
+    random_id = str(uuid.uuid4())
+    video_path = os.path.join(DOWNLOAD_DIR, f"input_{random_id}.mp4")
+    audio_path = os.path.join(DOWNLOAD_DIR, f"audio_{random_id}.mp3")
 
-    st.text_area("🗣️ النص الأصلي:", original_text)
+    try:
+        ydl_opts = {"outtmpl": video_path, "format": "bestvideo+bestaudio/best"}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+        st.success("تم تحميل الفيديو!")
 
-    # ترجمة بسيطة
-    from googletrans import Translator
-    translator = Translator()
-    translated = translator.translate(original_text, dest='ar')
-    arabic_text = translated.text
-    st.text_area("🌍 الترجمة العربية:", arabic_text)
+        # استخراج الصوت
+        st.info("جاري استخراج الصوت...")
+        video = mp.VideoFileClip(video_path)
+        video.audio.write_audiofile(audio_path)
+        st.audio(audio_path, format="audio/mp3")
+        st.success("تم استخراج الصوت!")
 
-    # تحويل إلى صوت
-    tts = gTTS(arabic_text, lang='ar')
-    tts.save("arabic_audio.mp3")
+        # جلب فيديو مناظر طبيعية من Pexels
+        st.info("جاري جلب فيديو خلفية من Pexels...")
+        headers = {'Authorization': PEXELS_API_KEY}
+        params = {'query': 'nature', 'per_page': 1}
+        response = requests.get('https://api.pexels.com/videos/search', headers=headers, params=params)
+        if response.status_code == 200 and response.json()['videos']:
+            bg_url = response.json()['videos'][0]['video_files'][0]['link']
+            st.video(bg_url)
+            st.success("تم جلب فيديو الخلفية!")
+            st.markdown(f"[تحميل فيديو الخلفية من هنا]({bg_url})")
+        else:
+            st.error("تعذر جلب فيديو الخلفية من Pexels.")
+        
+        st.markdown("---")
+        st.info("💡 يمكنك دمج الصوت مع الفيديو باستخدام مواقع مثل [Clideo](https://clideo.com/merge-video) أو [Online Convert](https://video.online-convert.com/convert-to-mp4) بسهولة.")
 
-    # تركيب الصوت الجديد على الفيديو
-    st.info("🎛️ جاري دمج الصوت الجديد...")
-    video = VideoFileClip("input_video.mp4")
-    audio = AudioFileClip("arabic_audio.mp3")
-    final_video = video.set_audio(audio)
-    final_video.write_videofile("output_video.mp4", codec="libx264", audio_codec="aac")
-
-    st.success("🎉 فيديوك المدبلج جاهز!")
-    st.video("output_video.mp4")
-    with open("output_video.mp4", "rb") as f:
-        st.download_button("⬇️ تحميل الفيديو المدبلج", f, file_name="dubbed_video.mp4")
+    except Exception as e:
+        st.error(f"حدث خطأ: {str(e)}")
