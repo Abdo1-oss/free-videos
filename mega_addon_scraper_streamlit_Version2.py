@@ -80,8 +80,14 @@ def get_nature_video_url():
             return data['videos'][0]['video_files'][0]['link']
     return None
 
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+import threading
+
+def start_bot():
     app.run_polling()
+
+if 'bot_thread' not in st.session_state:
+    bot_thread = threading.Thread(target=start_bot, daemon=True)
+    bot_thread.start()
+    st.session_state['bot_thread'] = bot_thread
+
+st.success("بوت تيليجرام يعمل في الخلفية ✅")
