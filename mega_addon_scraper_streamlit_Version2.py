@@ -7,7 +7,8 @@ from pydub import AudioSegment, silence
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
 )
-from moviepy.video.fx.all import blur  # لإضافة تأثير الضباب
+import cv2
+import numpy as np
 
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
@@ -55,12 +56,16 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
-# إضافة تأثير صدى (Echo) بسيط
+# تأثير صدى (Echo) بسيط
 def add_echo(sound, delay=250, attenuation=0.6):
     echo = sound - 20
     for i in range(1, 5):
         echo = echo.overlay(sound - int(20 + i*10), position=i*delay)
     return sound.overlay(echo)
+
+# دالة الضباب باستخدام OpenCV
+def blur_frame(img, ksize=15):
+    return cv2.GaussianBlur(img, (ksize|1, ksize|1), 0)
 
 st.set_page_config(page_title="فيديو قرآن شورتس بتأثيرات", layout="centered")
 st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية وصوت القارئ وتأثيرات")
@@ -118,7 +123,7 @@ if st.button("إنشاء الفيديو"):
         st.info("جاري إنتاج الفيديو النهائي...")
         video_clip = VideoFileClip(bg_video_path).resize(newsize=(1080, 1920))
         if add_blur:
-            video_clip = video_clip.fx(blur, size=15)
+            video_clip = video_clip.fl_image(lambda image: blur_frame(image, ksize=15))
         audio_clip = AudioFileClip(audio_path)
         duration = audio_clip.duration
         if video_clip.duration < duration:
