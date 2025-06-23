@@ -4,7 +4,6 @@ import tempfile
 import random
 import os
 from pydub import AudioSegment, silence
-AudioSegment.silent(duration=3000)
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, concatenate_videoclips
 )
@@ -177,7 +176,7 @@ if st.button("إنشاء الفيديو"):
                 r = requests.get(mp3_url)
                 if r.status_code != 200:
                     missing_ayahs.append(ayah)
-                    segment = Silence(duration=default_silence_ms).to_audio_segment()
+                    segment = AudioSegment.silent(duration=default_silence_ms)
                 else:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_ayah_file:
                         temp_ayah_file.write(r.content)
