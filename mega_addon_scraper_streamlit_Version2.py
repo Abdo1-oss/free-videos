@@ -1,54 +1,87 @@
-import streamlit as st
+import os
 import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 import moviepy.editor as mp
-import os
-import uuid
 
-# مفاتيح API
-PEXELS_API_KEY = "YOUR_PEXELS_API_KEY"
+# استخدم متغير البيئة لحماية التوكن
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7558390969:AAHJFZ-yOSvfSdG4CMEQrlb6sgHL8ydrxOo")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i")
+
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-st.set_page_config(page_title="مولد فيديو القرآن بخلفية طبيعية", layout="centered")
-st.title("🎬 مولد فيديو القرآن بخلفية مناظر طبيعية")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "مرحباً! أرسل لي رابط فيديو قرآن الكريم (من يوتيوب أو ما شابه)، وسأرسل لك فيديو مناظر طبيعية بنفس الصوت."
+    )
 
-video_url = st.text_input("أدخل رابط فيديو القرآن (يوتيوب أو غيره):")
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text.strip()
+    video_path = os.path.join(DOWNLOAD_DIR, "input.mp4")
+    audio_path = os.path.join(DOWNLOAD_DIR, "audio.mp3")
 
-if st.button("ابدأ المعالجة") and video_url:
-    st.info("جاري تحميل الفيديو...")
-    random_id = str(uuid.uuid4())
-    video_path = os.path.join(DOWNLOAD_DIR, f"input_{random_id}.mp4")
-    audio_path = os.path.join(DOWNLOAD_DIR, f"audio_{random_id}.mp3")
+    await update.message.reply_text("جاري تحميل الفيديو واستخراج الصوت...")
 
+    # تحميل الفيديو
     try:
         ydl_opts = {"outtmpl": video_path, "format": "bestvideo+bestaudio/best"}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-        st.success("تم تحميل الفيديو!")
+            ydl.download([url])
+    except Exception as e:
+        await update.message.reply_text(f"حدث خطأ أثناء تحميل الفيديو: {e}")
+        return
 
-        # استخراج الصوت
-        st.info("جاري استخراج الصوت...")
+    # استخراج الصوت
+    try:
         video = mp.VideoFileClip(video_path)
         video.audio.write_audiofile(audio_path)
-        st.audio(audio_path, format="audio/mp3")
-        st.success("تم استخراج الصوت!")
-
-        # جلب فيديو مناظر طبيعية من Pexels
-        st.info("جاري جلب فيديو خلفية من Pexels...")
-        headers = {'Authorization': PEXELS_API_KEY}
-        params = {'query': 'nature', 'per_page': 1}
-        response = requests.get('https://api.pexels.com/videos/search', headers=headers, params=params)
-        if response.status_code == 200 and response.json()['videos']:
-            bg_url = response.json()['videos'][0]['video_files'][0]['link']
-            st.video(bg_url)
-            st.success("تم جلب فيديو الخلفية!")
-            st.markdown(f"[تحميل فيديو الخلفية من هنا]({bg_url})")
-        else:
-            st.error("تعذر جلب فيديو الخلفية من Pexels.")
-        
-        st.markdown("---")
-        st.info("💡 يمكنك دمج الصوت مع الفيديو باستخدام مواقع مثل [Clideo](https://clideo.com/merge-video) أو [Online Convert](https://video.online-convert.com/convert-to-mp4) بسهولة.")
-
     except Exception as e:
-        st.error(f"حدث خطأ: {str(e)}")
+        await update.message.reply_text(f"حدث خطأ أثناء استخراج الصوت: {e}")
+        return
+
+    await update.message.reply_text("تم استخراج الصوت بنجاح ✅\nجاري جلب فيديو خلفية من مناظر طبيعية...")
+
+    # جلب فيديو مناظر طبيعية من Pexels
+    bg_video_url = get_nature_video_url()
+    if not bg_video_url:
+        await update.message.reply_text("تعذر الحصول على فيديو خلفية من Pexels.")
+        return
+
+    # إرسال النتائج للمستخدم
+    await update.message.reply_text(
+        f"رابط فيديو الخلفية من Pexels:\n{bg_video_url}\n\n"
+        f"تم استخراج الصوت من الفيديو الذي أرسلته ويمكنك تحميله من هنا:"
+    )
+    try:
+        with open(audio_path, "rb") as audio_file:
+            await update.message.reply_audio(audio_file)
+    except Exception:
+        await update.message.reply_text("تعذر إرسال ملف الصوت، لكنه محفوظ على السيرفر.")
+
+    await update.message.reply_text(
+        "يمكنك دمج الصوت بالفيديو باستخدام خدمات أونلاين مثل [clideo.com/merge-video](https://clideo.com/merge-video) أو [online-convert.com](https://video.online-convert.com/convert-to-mp4) أو عبر أي محرر فيديو."
+    )
+
+def get_nature_video_url():
+    headers = {'Authorization': PEXELS_API_KEY}
+    params = {'query': 'nature', 'per_page': 1}
+    response = requests.get(
+        'https://api.pexels.com/videos/search', headers=headers, params=params
+    )
+    if response.status_code == 200:
+        data = response.json()
+        if data['videos']:
+            # نختار جودة HD إن توفرت
+            for file in data['videos'][0]['video_files']:
+                if file['quality'] == 'hd':
+                    return file['link']
+            return data['videos'][0]['video_files'][0]['link']
+    return None
+
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.run_polling()
