@@ -8,7 +8,6 @@ from moviepy.editor import (
     VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, concatenate_videoclips
 )
 
-# ----------- إعداد البيانات ---------------
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
     {"name": "عبد الباسط مرتل", "id": "Abdul_Basit_Murattal_64kbps"},
@@ -16,6 +15,7 @@ QURAA = [
     {"name": "المعيقلي", "id": "MaherAlMuaiqly_64kbps"},
     {"name": "الغامدي", "id": "Ghamadi_40kbps"},
 ]
+
 SURA_NAMES = [
     "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام", "الأعراف", "الأنفال", "التوبة", "يونس", "هود", "يوسف", "الرعد",
     "إبراهيم", "الحجر", "النحل", "الإسراء", "الكهف", "مريم", "طه", "الأنبياء", "الحج", "المؤمنون", "النور", "الفرقان", "الشعراء",
@@ -27,14 +27,13 @@ SURA_NAMES = [
     "الشمس", "الليل", "الضحى", "الشرح", "التين", "العلق", "القدر", "البينة", "الزلزلة", "العاديات", "القارعة", "التكاثر", "العصر",
     "الهمزة", "الفيل", "قريش", "الماعون", "الكوثر", "الكافرون", "النصر", "المسد", "الإخلاص", "الفلق", "الناس"
 ]
-# عدد آيات كل سورة (من بيانات quran.com)
+
 SURA_AYAHS = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
 ]
 
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 
-# ------------- دوال مساعدة --------------
 def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
     start_trim = silence.detect_leading_silence(audio_segment, silence_thresh, chunk_size)
     end_trim = silence.detect_leading_silence(audio_segment.reverse(), silence_thresh, chunk_size)
@@ -47,8 +46,15 @@ def get_ayah_texts(sura, from_ayah, to_ayah):
     if resp.status_code != 200:
         return [""] * (to_ayah - from_ayah + 1)
     verses = resp.json()['verses']
-    texts = [v['text_uthmani'] for v in verses if from_ayah <= v['verse_number'] <= to_ayah]
-    # إذا ناقص، أكمل فراغات
+    texts = []
+    for v in verses:
+        try:
+            # verse_key مثل "2:5"
+            sura_num, ayah_num = map(int, v['verse_key'].split(':'))
+        except Exception:
+            continue
+        if from_ayah <= ayah_num <= to_ayah:
+            texts.append(v['text_uthmani'])
     while len(texts) < (to_ayah - from_ayah + 1):
         texts.append("")
     return texts
@@ -67,7 +73,6 @@ def get_random_nature_video_url():
             return f["link"]
     return video["video_files"][0]["link"]
 
-# ------------- واجهة التطبيق --------------
 st.set_page_config(page_title="فيديو قرآن شورتس مع نص الآيات", layout="centered")
 st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية ونص الآيات")
 
@@ -127,13 +132,13 @@ if st.button("إنشاء الفيديو"):
         else:
             video_clip = video_clip.subclip(0, duration)
 
-        # توزيع النصوص زمنياً (بشكل متساوي إذا لم توجد بيانات دقيقة)
         ayah_duration = duration / len(ayah_texts)
         clips = [video_clip.set_audio(audio_clip)]
         for i, text in enumerate(ayah_texts):
             start = i * ayah_duration
             end = (i+1) * ayah_duration
-            txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200), font='Amiri-Bold', bg_color='rgba(0,0,0,0.4)', method='caption')
+            txt_clip = (TextClip(text, fontsize=60, color='white', size=(1000, 200),
+                        font='Amiri-Bold', bg_color='rgba(0,0,0,0.4)', method='caption')
                         .set_position(('center', 'bottom')).set_start(start).set_end(end))
             clips.append(txt_clip)
         final = CompositeVideoClip(clips, size=(1080,1920)).set_duration(duration)
