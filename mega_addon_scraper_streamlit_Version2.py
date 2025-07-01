@@ -5,7 +5,7 @@ import random
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx
+    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx, TextClip, CompositeVideoClip, ImageClip
 )
 import cv2
 
@@ -53,7 +53,6 @@ SURA_AYAHS = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
 ]
 
-# ------------ فلترة الفيديوهات ------------
 def is_people_video(video_text):
     people_keywords = [
         "person","people","man","woman","boy","girl","child","men","women","kids","kid","human","face",
@@ -65,11 +64,8 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-# ------------ جلب فيديوهات شورتس متنوعة جميلة ------------
-
 def get_pexels_shorts_videos(api_key, needed_duration):
     headers = {"Authorization": api_key}
-    # كلمات مفتاحية متنوعة للطبيعة والمناظر الجميلة بدون بشر
     keywords = [
         "mountain", "river", "sea", "flowers", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
         "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks"
@@ -96,7 +92,6 @@ def get_pexels_shorts_videos(api_key, needed_duration):
     return shorts
 
 def get_pixabay_shorts_videos(api_key, needed_duration):
-    # كلمات مفتاحية متنوعة للطبيعة والمناظر الجميلة بدون بشر
     keywords = [
         "mountain", "river", "sea", "flowers", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
         "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks"
@@ -136,40 +131,74 @@ def download_and_get_clip(url, used_links, resize=(1080,1920)):
                 file.write(chunk)
         file.flush()
         clip = VideoFileClip(file.name).resize(newsize=resize)
-        # تحقق إذا كان الفيديو قصير جداً أو فارغ
         if clip.duration < 2:
             return None, file.name
-        # لا تكرار نفس الفيديو
         if url in used_links:
             return None, file.name
         used_links.add(url)
         return clip, file.name
 
-# ------------ فلترة الصمت في الصوت ------------
 def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
     start_trim = silence.detect_leading_silence(audio_segment, silence_thresh, chunk_size)
     end_trim = silence.detect_leading_silence(audio_segment.reverse(), silence_thresh, chunk_size)
     duration = len(audio_segment)
     return audio_segment[start_trim:duration-end_trim]
 
-# ------------ صدى الصوت ------------
 def add_echo(sound, delay=250, attenuation=0.6):
     echo = sound - 20
     for i in range(1, 5):
         echo = echo.overlay(sound - int(20 + i*10), position=i*delay)
     return sound.overlay(echo)
 
-# ------------ تأثيرات مونتاج للفيديو ------------
+def blur_frame(img, ksize=15):
+    return cv2.GaussianBlur(img, (ksize|1, ksize|1), 0)
+
+# Ken Burns (Zoom & Pan) effect
+def ken_burns_effect(clip, zoom=1.1, pan_direction='left'):
+    w, h = clip.size
+    if pan_direction == 'left':
+        return clip.fx(vfx.crop, x1=0, y1=0, x2=int(w*(1-1/zoom)), y2=0).fx(vfx.resize, width=w)
+    elif pan_direction == 'right':
+        return clip.fx(vfx.crop, x1=int(w*(1-1/zoom)), y1=0, x2=0, y2=0).fx(vfx.resize, width=w)
+    else:  # center zoom
+        return clip.fx(vfx.resize, lambda t: 1 + (zoom-1)*t/clip.duration)
+
+# Vignette (تدرج لوني عند الحواف)
+def add_vignette(clip, strength=0.6):
+    import numpy as np
+    def vignette(image):
+        rows, cols = image.shape[:2]
+        kernel_x = cv2.getGaussianKernel(cols, 200)
+        kernel_y = cv2.getGaussianKernel(rows, 200)
+        kernel = kernel_y * kernel_x.T
+        mask = 255 * kernel / np.linalg.norm(kernel)
+        for i in range(3):
+            image[:,:,i] = image[:,:,i] * (1-strength) + mask * strength
+        return image
+    return clip.fl_image(vignette)
+
+# نص متحرك
+def add_text_clip(clip, text, fontsize=60, duration=5):
+    try:
+        txt_clip = TextClip(text, fontsize=fontsize, color='white', font='Amiri-Bold', bg_color='rgba(0,0,0,0.3)')
+    except:
+        txt_clip = TextClip(text, fontsize=fontsize, color='white', bg_color='rgba(0,0,0,0.3)')
+    txt_clip = txt_clip.set_position(('center','bottom')).set_duration(duration).crossfadein(1)
+    composite = CompositeVideoClip([clip, txt_clip.set_start(0)])
+    return composite.set_duration(clip.duration)
+
+# جاما، تباين، سطوع، أبيض وأسود ...إلخ
 def montage_effects(clip, effect_name="random"):
-    # يمكنك إضافة المزيد من التأثيرات هنا
     effects = [
-        lambda c: c.fx(vfx.colorx, 1.2),  # زيادة السطوع قليلاً
-        lambda c: c.fx(vfx.lum_contrast, 0, 50, 128),  # زيادة التباين
-        lambda c: c.fx(vfx.gamma_corr, 1.1),  # gamma
-        lambda c: c.fx(vfx.fadein, 1),  # fade in أول ثانية
-        lambda c: c.fx(vfx.fadeout, 1),  # fade out آخر ثانية
-        lambda c: c.fx(vfx.blackwhite),  # الأبيض والأسود
-        lambda c: c.fx(vfx.blur, 2),  # طمس بسيط
+        lambda c: c.fx(vfx.colorx, 1.2),
+        lambda c: c.fx(vfx.lum_contrast, 0, 50, 128),
+        lambda c: c.fx(vfx.gamma_corr, 1.1),
+        lambda c: c.fx(vfx.fadein, 1),
+        lambda c: c.fx(vfx.fadeout, 1),
+        lambda c: c.fx(vfx.blackwhite),
+        lambda c: c.fl_image(lambda img: blur_frame(img, ksize=15)),
+        lambda c: ken_burns_effect(c, zoom=1.13, pan_direction=random.choice(['left','right','center'])),
+        lambda c: add_vignette(c, strength=0.3),
     ]
     if effect_name == "random":
         return random.choice(effects)(clip)
@@ -179,10 +208,6 @@ def montage_effects(clip, effect_name="random"):
         return clip.fx(vfx.colorx, 1.2)
     else:
         return effects[0](clip)
-
-# ------------ ضباب الفيديو ------------
-def blur_frame(img, ksize=15):
-    return cv2.GaussianBlur(img, (ksize|1, ksize|1), 0)
 
 # ------------ واجهة المستخدم ------------
 st.set_page_config(page_title="فيديو قرآن شورتس بتأثيرات", layout="centered")
@@ -203,7 +228,8 @@ with col2:
 
 add_blur = st.checkbox("تفعيل الضباب (Blur) على الفيديو؟", value=True)
 add_echo_effect = st.checkbox("تفعيل الصدى (Echo) على الصوت؟", value=True)
-add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (لون/تباين/ألوان...)", value=True)
+add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (لون/تباين/تكبير/تدرج حواف...)", value=True)
+add_text_fx = st.checkbox("إظهار اسم السورة والقارئ في بداية الفيديو", value=True)
 video_source = st.selectbox("اختر مصدر الفيديو:", ["Pexels", "Pixabay"])
 
 if st.button("إنشاء الفيديو"):
@@ -211,7 +237,7 @@ if st.button("إنشاء الفيديو"):
         with st.spinner("جاري تحميل ودمج الصوت لجميع الآيات..."):
             merged = None
             missing_ayahs = []
-            default_silence_ms = 3000  # إذا لم تتوفر آية يتم وضع 3 ثوان صمت
+            default_silence_ms = 3000
             for ayah in range(int(from_ayah), int(to_ayah)+1):
                 mp3_url = f"https://everyayah.com/data/{selected_qari}/{sura_idx:03d}{ayah:03d}.mp3"
                 r = requests.get(mp3_url)
@@ -231,9 +257,8 @@ if st.button("إنشاء الفيديو"):
                 st.stop()
             if add_echo_effect:
                 merged = add_echo(merged)
-            # إضافة تأثير الظهور والاختفاء التدريجي
-            fade_in_duration_ms = 2000   # ثانيتين
-            fade_out_duration_ms = 3000  # ثلاث ثوانٍ
+            fade_in_duration_ms = 2000
+            fade_out_duration_ms = 3000
             merged = merged.fade_in(fade_in_duration_ms).fade_out(fade_out_duration_ms)
             if missing_ayahs:
                 st.warning(f"بعض الآيات غير متوفرة للقارئ المختار وتم وضع صمت مكانها: {', '.join(str(a) for a in missing_ayahs)}")
@@ -262,16 +287,15 @@ if st.button("إنشاء الفيديو"):
                 link = video_obj["link"]
                 shorts_index += 1
                 if link in used_links:
-                    continue  # تجنب التكرار
+                    continue
                 clip, fname = download_and_get_clip(link, used_links)
                 if not clip:
                     continue
                 if add_blur:
                     clip = clip.fl_image(lambda image: blur_frame(image, ksize=15))
                 if add_montage_fx:
-                    # اختيار تأثير مونتاج عشوائي لكل مقطع
                     clip = montage_effects(clip, effect_name="random")
-                # التأكد ألا يتجاوز الطول الكلي المطلوب
+                # لا يتجاوز الطول الكلي المطلوب
                 if downloaded_duration + clip.duration > duration:
                     clip = clip.subclip(0, duration-downloaded_duration)
                 video_clips.append(clip)
@@ -280,6 +304,11 @@ if st.button("إنشاء الفيديو"):
                 st.error("لم يتم العثور على فيديوهات كافية أو مناسبة لتغطية مدة الصوت. حاول مجددًا أو غيّر المصدر.")
                 st.stop()
             final_video = concatenate_videoclips(video_clips).subclip(0, duration)
+
+        # إضافة نص متحرك في البداية (اسم السورة والقارئ)
+        if add_text_fx:
+            text = f"سورة {SURA_NAMES[sura_idx-1]} (آية {from_ayah} إلى {to_ayah}) • القارئ: {qari_names[selected_qari_idx]}"
+            final_video = add_text_clip(final_video, text, fontsize=60, duration=5)
 
         final = final_video.set_audio(audio_clip).set_duration(duration)
         output_path = "quran_shorts.mp4"
