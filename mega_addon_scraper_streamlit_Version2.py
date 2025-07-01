@@ -5,24 +5,36 @@ import random
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, concatenate_videoclips
+    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx
 )
 import cv2
 
 # ------------ إعدادات API KEYS ------------
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 PIXABAY_API_KEY = "50380897-76243eaec536038f687ff8e15"
-# Unsplash لا يدعم فيديو فعلي، فقط صور
 
-# ------------ إعدادات القراء ------------
+# ------------ قائمة أفضل الشيوخ من everyayah.com ------------
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
-    {"name": "عبد الباسط مرتل", "id": "Abdul_Basit_Murattal_64kbps"},
     {"name": "المنشاوي مرتل", "id": "Minshawy_Murattal_128kbps"},
-    {"name": "المعيقلي", "id": "MaherAlMuaiqly_64kbps"},
+    {"name": "عبد الباسط مرتل", "id": "Abdul_Basit_Murattal_64kbps"},
     {"name": "الغامدي", "id": "Ghamadi_40kbps"},
-    {"name": "مشاري العفاسي", "id": "Alafasy_64kbps"},
-    {"name": "سعود الشريم", "id": "Shuraym_64kbps"},
+    {"name": "المعيقلي", "id": "MaherAlMuaiqly_64kbps"},
+    {"name": "العفاسي", "id": "Alafasy_64kbps"},
+    {"name": "الشريم", "id": "Shuraym_64kbps"},
+    {"name": "فارس عباد", "id": "Fares_Abbad_64kbps"},
+    {"name": "الشاطري", "id": "Shatri_64kbps"},
+    {"name": "أبو بكر الشاطري", "id": "Abu_Bakr_Ash-Shaatree_128kbps"},
+    {"name": "محمد أيوب", "id": "Muhammad_Ayyoub_128kbps"},
+    {"name": "ياسر الدوسري", "id": "Yasser_Ad-Dussary_128kbps"},
+    {"name": "أحمد العجمي", "id": "Ajamy_64kbps"},
+    {"name": "إدريس أبكر", "id": "Idrees_Abkar_48kbps"},
+    {"name": "خليفة الطنيجي", "id": "Tunaiji_64kbps"},
+    {"name": "عبد الله بصفر", "id": "Basfar_48kbps"},
+    {"name": "الحصري مجود", "id": "Husary_Mujawwad_128kbps"},
+    {"name": "محمد جبريل", "id": "Jibreel_64kbps"},
+    {"name": "علي جابر", "id": "Ali_Jaber_64kbps"},
+    {"name": "المنشاوي مجود", "id": "Minshawy_Mujawwad_128kbps"},
 ]
 
 SURA_NAMES = [
@@ -53,78 +65,85 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-# ------------ جلب فيديوهات شورتس ------------
+# ------------ جلب فيديوهات شورتس متنوعة جميلة ------------
 
 def get_pexels_shorts_videos(api_key, needed_duration):
     headers = {"Authorization": api_key}
-    params = {"query": "nature", "per_page": 50}
-    resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
-    videos = resp.json().get('videos', [])
+    # كلمات مفتاحية متنوعة للطبيعة والمناظر الجميلة بدون بشر
+    keywords = [
+        "mountain", "river", "sea", "flowers", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
+        "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks"
+    ]
     shorts = []
-    for v in videos:
-        desc = (v.get("description") or "").lower()
-        user_name = (v.get("user", {}).get("name") or "").lower()
-        tags = [t.lower() for t in v.get("tags",[])]
-        text = " ".join(tags) + " " + desc + " " + user_name
-        if is_people_video(text):
+    for keyword in keywords:
+        params = {"query": keyword, "per_page": 40}
+        resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
+        try:
+            videos = resp.json().get('videos', [])
+        except Exception:
             continue
-        for file in v["video_files"]:
-            if file["quality"]=="hd" and is_shorts(file["width"], file["height"], v["duration"]):
-                shorts.append((file["link"], v["duration"]))  # (الرابط, المدة)
-                break
+        for v in videos:
+            desc = (v.get("description") or "").lower()
+            user_name = (v.get("user", {}).get("name") or "").lower()
+            tags = [t.lower() for t in v.get("tags",[])]
+            text = " ".join(tags) + " " + desc + " " + user_name
+            if is_people_video(text):
+                continue
+            for file in v["video_files"]:
+                if file["quality"]=="hd" and is_shorts(file["width"], file["height"], v["duration"]):
+                    shorts.append({"link": file["link"], "duration": v["duration"], "title": v.get("description",'')})
+                    break
     return shorts
 
 def get_pixabay_shorts_videos(api_key, needed_duration):
-    params = {
-        "key": api_key,
-        "q": "nature",
-        "per_page": 50,
-        "video_type": "film",
-        "safesearch": "true"
-    }
-    resp = requests.get("https://pixabay.com/api/videos/", params=params)
-    videos = resp.json().get("hits", [])
+    # كلمات مفتاحية متنوعة للطبيعة والمناظر الجميلة بدون بشر
+    keywords = [
+        "mountain", "river", "sea", "flowers", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
+        "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks"
+    ]
     shorts = []
-    for v in videos:
-        text = (v.get("tags") or "").lower() + " " + (v.get("user") or "").lower()
-        if is_people_video(text):
+    for keyword in keywords:
+        params = {
+            "key": api_key,
+            "q": keyword,
+            "per_page": 40,
+            "video_type": "film",
+            "safesearch": "true"
+        }
+        resp = requests.get("https://pixabay.com/api/videos/", params=params)
+        try:
+            videos = resp.json().get("hits", [])
+        except Exception:
             continue
-        for vid in v["videos"].values():
-            if is_shorts(vid["width"], vid["height"], v["duration"]):
-                shorts.append((vid["url"], v["duration"]))
-                break
+        for v in videos:
+            text = (v.get("tags") or "").lower() + " " + (v.get("user") or "").lower()
+            if is_people_video(text):
+                continue
+            for vid in v["videos"].values():
+                if is_shorts(vid["width"], vid["height"], v["duration"]):
+                    shorts.append({"link": vid["url"], "duration": v["duration"], "title": v.get("tags",'')})
+                    break
     return shorts
 
-# Unsplash صور فقط، يمكن تحويل صورة واحدة لفيديو طويل أو عدة صور لمقطع متحرك
-def get_unsplash_nature_images():
-    st.warning("Unsplash لا يدعم فيديوهات حقيقية، سيتم استخدام صور متحركة.")
-    url = f"https://api.unsplash.com/search/photos?query=nature&per_page=30&orientation=portrait&client_id=ضع_مفتاح_unsplash_هنا"
-    resp = requests.get(url)
-    data = resp.json()
-    images = [img["urls"]["regular"] for img in data.get("results",[])]
-    return images
-
-def download_and_get_clip(url, resize=(1080,1920)):
+def download_and_get_clip(url, used_links, resize=(1080,1920)):
     headers = {"User-Agent": "Mozilla/5.0"}
     resp = requests.get(url, stream=True, headers=headers)
+    if resp.status_code != 200:
+        return None, None
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as file:
         for chunk in resp.iter_content(chunk_size=1024*1024):
             if chunk:
                 file.write(chunk)
         file.flush()
-        return VideoFileClip(file.name).resize(newsize=resize), file.name
-
-def make_slideshow_from_images(images, duration, resize=(1080,1920)):
-    from moviepy.editor import ImageClip
-    clips = []
-    img_duration = duration / len(images)
-    for img_url in images:
-        resp = requests.get(img_url)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as imgfile:
-            imgfile.write(resp.content)
-            imgfile.flush()
-            clips.append(ImageClip(imgfile.name).set_duration(img_duration).resize(newsize=resize))
-    return concatenate_videoclips(clips)
+        clip = VideoFileClip(file.name).resize(newsize=resize)
+        # تحقق إذا كان الفيديو قصير جداً أو فارغ
+        if clip.duration < 2:
+            return None, file.name
+        # لا تكرار نفس الفيديو
+        if url in used_links:
+            return None, file.name
+        used_links.add(url)
+        return clip, file.name
 
 # ------------ فلترة الصمت في الصوت ------------
 def trim_silence(audio_segment, silence_thresh=-40, chunk_size=10):
@@ -140,13 +159,34 @@ def add_echo(sound, delay=250, attenuation=0.6):
         echo = echo.overlay(sound - int(20 + i*10), position=i*delay)
     return sound.overlay(echo)
 
+# ------------ تأثيرات مونتاج للفيديو ------------
+def montage_effects(clip, effect_name="random"):
+    # يمكنك إضافة المزيد من التأثيرات هنا
+    effects = [
+        lambda c: c.fx(vfx.colorx, 1.2),  # زيادة السطوع قليلاً
+        lambda c: c.fx(vfx.lum_contrast, 0, 50, 128),  # زيادة التباين
+        lambda c: c.fx(vfx.gamma_corr, 1.1),  # gamma
+        lambda c: c.fx(vfx.fadein, 1),  # fade in أول ثانية
+        lambda c: c.fx(vfx.fadeout, 1),  # fade out آخر ثانية
+        lambda c: c.fx(vfx.blackwhite),  # الأبيض والأسود
+        lambda c: c.fx(vfx.blur, 2),  # طمس بسيط
+    ]
+    if effect_name == "random":
+        return random.choice(effects)(clip)
+    elif effect_name == "bw":
+        return clip.fx(vfx.blackwhite)
+    elif effect_name == "bright":
+        return clip.fx(vfx.colorx, 1.2)
+    else:
+        return effects[0](clip)
+
 # ------------ ضباب الفيديو ------------
 def blur_frame(img, ksize=15):
     return cv2.GaussianBlur(img, (ksize|1, ksize|1), 0)
 
 # ------------ واجهة المستخدم ------------
 st.set_page_config(page_title="فيديو قرآن شورتس بتأثيرات", layout="centered")
-st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية طبيعية وصوت القارئ وتأثيرات")
+st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية جميلة وتأثيرات مونتاج")
 
 qari_names = [q["name"] for q in QURAA]
 selected_qari_idx = st.selectbox("اختر القارئ:", options=range(len(qari_names)), format_func=lambda i: qari_names[i])
@@ -163,7 +203,8 @@ with col2:
 
 add_blur = st.checkbox("تفعيل الضباب (Blur) على الفيديو؟", value=True)
 add_echo_effect = st.checkbox("تفعيل الصدى (Echo) على الصوت؟", value=True)
-video_source = st.selectbox("اختر مصدر الفيديو:", ["Pexels", "Pixabay", "Unsplash (صور فقط)"])
+add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (لون/تباين/ألوان...)", value=True)
+video_source = st.selectbox("اختر مصدر الفيديو:", ["Pexels", "Pixabay"])
 
 if st.button("إنشاء الفيديو"):
     try:
@@ -210,36 +251,33 @@ if st.button("إنشاء الفيديو"):
                 shorts = get_pexels_shorts_videos(PEXELS_API_KEY, duration)
             elif video_source == "Pixabay":
                 shorts = get_pixabay_shorts_videos(PIXABAY_API_KEY, duration)
-            elif video_source.startswith("Unsplash"):
-                images = get_unsplash_nature_images()
-                final_video = make_slideshow_from_images(images, duration)
-                if add_blur:
-                    final_video = final_video.fl_image(lambda image: blur_frame(image, ksize=15))
-                final = final_video.set_audio(audio_clip).set_duration(duration)
-                output_path = "quran_shorts.mp4"
-                final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
-                st.success("تم إنشاء الفيديو بنجاح!")
-                st.video(output_path)
-                with open(output_path, "rb") as f:
-                    st.download_button("تحميل الفيديو", f, file_name="quran_shorts.mp4", mime="video/mp4")
-                st.stop()
             else:
                 shorts = []
 
+            random.shuffle(shorts)
             downloaded_duration = 0.0
-            while downloaded_duration < duration and shorts:
-                link, vid_dur = random.choice(shorts)
+            shorts_index = 0
+            while downloaded_duration < duration and shorts_index < len(shorts):
+                video_obj = shorts[shorts_index]
+                link = video_obj["link"]
+                shorts_index += 1
                 if link in used_links:
-                    shorts = [s for s in shorts if s[0] != link]
+                    continue  # تجنب التكرار
+                clip, fname = download_and_get_clip(link, used_links)
+                if not clip:
                     continue
-                clip, fname = download_and_get_clip(link)
                 if add_blur:
                     clip = clip.fl_image(lambda image: blur_frame(image, ksize=15))
+                if add_montage_fx:
+                    # اختيار تأثير مونتاج عشوائي لكل مقطع
+                    clip = montage_effects(clip, effect_name="random")
+                # التأكد ألا يتجاوز الطول الكلي المطلوب
+                if downloaded_duration + clip.duration > duration:
+                    clip = clip.subclip(0, duration-downloaded_duration)
                 video_clips.append(clip)
                 downloaded_duration += clip.duration
-                used_links.add(link)
             if not video_clips or downloaded_duration < duration:
-                st.error("لم يتم العثور على فيديوهات كافية لتغطية مدة الصوت. حاول مجددًا أو غيّر المصدر.")
+                st.error("لم يتم العثور على فيديوهات كافية أو مناسبة لتغطية مدة الصوت. حاول مجددًا أو غيّر المصدر.")
                 st.stop()
             final_video = concatenate_videoclips(video_clips).subclip(0, duration)
 
