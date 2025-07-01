@@ -12,7 +12,7 @@ import cv2
 import cohere
 
 # ------------ إعدادات API KEYS ------------
-COHERE_API_KEY = "ضع_مفتاحك_هنا"
+COHERE_API_KEY = "K1GW0y2wWiwW7xlK7db7zZnqX7sxfRVGiWopVfCD"
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 PIXABAY_API_KEY = "50380897-76243eaec536038f687ff8e15"
 
@@ -55,7 +55,6 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-# ----------- استخلاص الترجمة من quran api -----------
 def get_ayah_text_and_translation(sura_idx, ayah_num):
     arabic, english = "", ""
     # العربية
@@ -70,7 +69,6 @@ def get_ayah_text_and_translation(sura_idx, ayah_num):
         english = r_en.json().get("data", {}).get("text", "")
     return arabic, english
 
-# ---------- استخلاص كلمات بصريّة من CoHere ----------
 def get_keywords_from_cohere(arabic, english):
     co = cohere.Client(COHERE_API_KEY)
     prompt = f"""Given this Quran verse and its English translation, suggest 7-10 English visual keywords suitable for searching background videos (avoid humans, faces, music, forbidden things).
@@ -135,6 +133,34 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
                     break
     return shorts
 
+def get_mixkit_shorts_videos(needed_duration, keywords):
+    # روابط يدوية لمقاطع مجانية مميزة من Mixkit (يمكنك التوسعة)
+    mixkit_links = [
+        "https://assets.mixkit.co/videos/download/mixkit-clouds-in-the-sky-123.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-mountain-landscape-1233.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-sunrise-in-the-mountains-1176.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-forest-trees-1234.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-stars-in-night-sky-1186.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-moon-in-the-night-sky-1354.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-rain-clouds-mountain-1173.mp4",
+        "https://assets.mixkit.co/videos/download/mixkit-starry-night-sky-1214.mp4"
+    ]
+    shorts = []
+    for link in mixkit_links:
+        shorts.append({"link": link, "duration": 15, "title": "Mixkit Nature"})
+    return shorts
+
+def get_coverr_shorts_videos(needed_duration, keywords):
+    coverr_links = [
+        "https://www.coverr.co/s3/mp4/river.mp4",
+        "https://www.coverr.co/s3/mp4/forest.mp4",
+        "https://www.coverr.co/s3/mp4/space.mp4"
+    ]
+    shorts = []
+    for link in coverr_links:
+        shorts.append({"link": link, "duration": 20, "title": "Coverr Nature"})
+    return shorts
+
 def download_and_get_clip(url, used_links, resize=(1080,1920)):
     headers = {"User-Agent": "Mozilla/5.0"}
     resp = requests.get(url, stream=True, headers=headers)
@@ -191,7 +217,6 @@ def add_vignette(clip, strength=0.6):
     return clip.fl_image(vignette)
 
 def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strength, blur_strength):
-    # التأثيرات حسب اختيار المستخدم
     if do_blur:
         clip = clip.fl_image(lambda img: blur_frame(img, ksize=int(blur_strength)))
     if do_zoom:
@@ -202,7 +227,6 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
         clip = clip.fx(vfx.blackwhite)
     return clip
 
-# ------------ واجهة المستخدم ------------
 st.set_page_config(page_title="فيديو قرآن شورتس ذكي", layout="centered")
 st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية ذكية وتأثيرات متقدمة")
 
@@ -221,8 +245,8 @@ with col2:
 
 video_sources = st.multiselect(
     "اختر مصادر الفيديو (يمكنك تحديد أكثر من مصدر):",
-    options=["Pexels", "Pixabay"],
-    default=["Pexels", "Pixabay"]
+    options=["Pexels", "Pixabay", "Mixkit", "Coverr"],
+    default=["Pexels", "Pixabay", "Mixkit", "Coverr"]
 )
 
 st.markdown("**خيارات تخصيص المؤثرات**:")
@@ -249,7 +273,6 @@ uploaded_file = st.file_uploader("ارفع فيديو/صورة خلفية (اخ�
 if st.button("إنشاء الفيديو"):
     try:
         st.info("تحليل الآيات وجلب الكلمات المفتاحية الذكية...")
-        # تحليل أول آية فقط - يمكن توسيعه لاحقاً
         ayah_ar, ayah_en = get_ayah_text_and_translation(sura_idx, from_ayah)
         keywords = get_keywords_from_cohere(ayah_ar, ayah_en)
         st.caption("الكلمات المفتاحية الذكية: " + ', '.join(keywords))
@@ -288,12 +311,10 @@ if st.button("إنشاء الفيديو"):
         audio_clip = AudioFileClip(audio_path).fx(vfx.speedx, video_speed)
         duration = audio_clip.duration
 
-        # معالجة الفيديو/الخلفية
         resize = aspect_map[aspect]
         video_clips = []
         used_links = set()
         if uploaded_file:
-            # إذا رفع المستخدم فيديو أو صورة - استخدمها كخلفية
             file_ext = os.path.splitext(uploaded_file.name)[-1]
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as f:
                 f.write(uploaded_file.read())
@@ -310,6 +331,10 @@ if st.button("إنشاء الفيديو"):
                     shorts += get_pexels_shorts_videos(PEXELS_API_KEY, duration, keywords)
                 if "Pixabay" in video_sources:
                     shorts += get_pixabay_shorts_videos(PIXABAY_API_KEY, duration, keywords)
+                if "Mixkit" in video_sources:
+                    shorts += get_mixkit_shorts_videos(duration, keywords)
+                if "Coverr" in video_sources:
+                    shorts += get_coverr_shorts_videos(duration, keywords)
                 random.shuffle(shorts)
                 downloaded_duration = 0.0
                 shorts_index = 0
@@ -322,7 +347,6 @@ if st.button("إنشاء الفيديو"):
                     clip, fname = download_and_get_clip(link, used_links, resize=resize)
                     if not clip:
                         continue
-                    # تخصيص التأثيرات
                     clip = montage_effects(
                         clip,
                         do_bw=do_bw,
