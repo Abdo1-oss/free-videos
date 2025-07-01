@@ -3,40 +3,28 @@ import requests
 import tempfile
 import random
 import os
+import shutil
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx
+    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx, CompositeVideoClip, ImageClip
 )
 import cv2
+import cohere
 
 # ------------ إعدادات API KEYS ------------
+COHERE_API_KEY = "ضع_مفتاحك_هنا"
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 PIXABAY_API_KEY = "50380897-76243eaec536038f687ff8e15"
 
-# ------------ قائمة أفضل الشيوخ من everyayah.com ------------
+# ------------ قائمة الشيوخ ------------
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
     {"name": "المنشاوي مرتل", "id": "Minshawy_Murattal_128kbps"},
     {"name": "عبد الباسط مرتل", "id": "Abdul_Basit_Murattal_64kbps"},
-    {"name": "الغامدي", "id": "Ghamadi_40kbps"},
     {"name": "المعيقلي", "id": "MaherAlMuaiqly_64kbps"},
-    {"name": "العفاسي", "id": "Alafasy_64kbps"},
-    {"name": "الشريم", "id": "Shuraym_64kbps"},
-    {"name": "فارس عباد", "id": "Fares_Abbad_64kbps"},
-    {"name": "الشاطري", "id": "Shatri_64kbps"},
-    {"name": "أبو بكر الشاطري", "id": "Abu_Bakr_Ash-Shaatree_128kbps"},
-    {"name": "محمد أيوب", "id": "Muhammad_Ayyoub_128kbps"},
-    {"name": "ياسر الدوسري", "id": "Yasser_Ad-Dussary_128kbps"},
-    {"name": "أحمد العجمي", "id": "Ajamy_64kbps"},
-    {"name": "إدريس أبكر", "id": "Idrees_Abkar_48kbps"},
-    {"name": "خليفة الطنيجي", "id": "Tunaiji_64kbps"},
-    {"name": "عبد الله بصفر", "id": "Basfar_48kbps"},
-    {"name": "الحصري مجود", "id": "Husary_Mujawwad_128kbps"},
-    {"name": "محمد جبريل", "id": "Jibreel_64kbps"},
-    {"name": "علي جابر", "id": "Ali_Jaber_64kbps"},
-    {"name": "المنشاوي مجود", "id": "Minshawy_Mujawwad_128kbps"},
+    {"name": "العفاسي", "id": "Alafasy_64kbps"}
+    # يمكنك إضافة المزيد
 ]
-
 SURA_NAMES = [
     "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام", "الأعراف", "الأنفال", "التوبة", "يونس", "هود", "يوسف", "الرعد",
     "إبراهيم", "الحجر", "النحل", "الإسراء", "الكهف", "مريم", "طه", "الأنبياء", "الحج", "المؤمنون", "النور", "الفرقان", "الشعراء",
@@ -48,12 +36,10 @@ SURA_NAMES = [
     "الشمس", "الليل", "الضحى", "الشرح", "التين", "العلق", "القدر", "البينة", "الزلزلة", "العاديات", "القارعة", "التكاثر", "العصر",
     "الهمزة", "الفيل", "قريش", "الماعون", "الكوثر", "الكافرون", "النصر", "المسد", "الإخلاص", "الفلق", "الناس"
 ]
-
 SURA_AYAHS = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
 ]
 
-# فلترة الفيديوهات: أشخاص أو أشياء مخالفة
 def is_haram_video(video_text):
     people_keywords = [
         "person","people","man","woman","boy","girl","child","men","women","kids","kid","human","face",
@@ -69,49 +55,43 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-def suggest_keywords(sura_idx, from_ayah, to_ayah):
-    generic_keywords = [
-        "nature", "mountain", "river", "sea", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
-        "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks",
-        "moon", "stars", "sun", "night", "light", "storm", "planet", "space", "galaxy", "universe",
-        "space", "planet", "nebula", "stars", "galaxy", "universe", "cosmos", "astronomy", "earth", "moon",
-        "grave", "graves", "tomb", "cemetery", "gravesite", "graveyard"
-    ]
-    space_keywords = ["space", "universe", "galaxy", "cosmos", "nebula", "planets", "planet", "stars", "astronomy", "moon", "earth", "solar system"]
-    graves_keywords = ["grave", "graves", "tomb", "cemetery", "gravesite", "graveyard"]
-    qiyamah_keywords = ["judgement day", "apocalypse", "resurrection", "afterlife", "hereafter", "heaven", "hell", "dark clouds", "storm", "end times"]
+# ----------- استخلاص الترجمة من quran api -----------
+def get_ayah_text_and_translation(sura_idx, ayah_num):
+    arabic, english = "", ""
+    # العربية
+    url_ar = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/ar"
+    r_ar = requests.get(url_ar)
+    if r_ar.ok:
+        arabic = r_ar.json().get("data", {}).get("text", "")
+    # الإنجليزية
+    url_en = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/en.asad"
+    r_en = requests.get(url_en)
+    if r_en.ok:
+        english = r_en.json().get("data", {}).get("text", "")
+    return arabic, english
 
-    sura_name = SURA_NAMES[sura_idx-1]
-    ayat_text = ""
-    try:
-        from_ = int(from_ayah)
-        url = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{from_}/ar"
-        r = requests.get(url)
-        if r.ok:
-            ayat_text = r.json().get("data", {}).get("text", "")
-    except Exception:
-        pass
-    
-    keywords = generic_keywords.copy()
-    if sura_name in ["الأنبياء", "الرحمن", "القيامة", "الواقعة", "الحاقة", "المعارج", "النبأ", "الزلزلة", "القارعة", "التكوير", "الانفطار", "المطففين", "الانشقاق"]:
-        keywords += qiyamah_keywords
-    if sura_name in ["الشمس", "القمر", "النجم", "الكهف", "الإسراء", "الحديد", "يس", "الصافات"]:
-        keywords += space_keywords
-    if ("قبر" in ayat_text) or (sura_name in ["التكاثر", "الزلزلة", "القارعة"]):
-        keywords += graves_keywords
-    if any(word in ayat_text for word in ["نجوم", "كواكب", "شمس", "قمر", "سحاب", "فضاء", "سماء", "ليل", "نهار", "ظلام", "نور"]):
-        keywords += space_keywords
-    if any(word in ayat_text for word in ["قبر", "قبور", "موت", "عظام", "تراب"]):
-        keywords += graves_keywords
-    if any(word in ayat_text for word in ["بحر", "ماء", "أنهار"]):
-        keywords += ["sea", "ocean", "river", "water", "waves", "rain"]
-    return list(set(keywords))
+# ---------- استخلاص كلمات بصريّة من CoHere ----------
+def get_keywords_from_cohere(arabic, english):
+    co = cohere.Client(COHERE_API_KEY)
+    prompt = f"""Given this Quran verse and its English translation, suggest 7-10 English visual keywords suitable for searching background videos (avoid humans, faces, music, forbidden things).
+Verse: {arabic}
+Translation: {english}
+List only the keywords, comma-separated:"""
+    response = co.generate(
+        model="command-r",
+        prompt=prompt,
+        max_tokens=60,
+        temperature=0.3,
+        stop_sequences=["\n"]
+    )
+    kws = response.generations[0].text.strip()
+    return [k.strip() for k in kws.replace('\n','').split(',') if k.strip()]
 
 def get_pexels_shorts_videos(api_key, needed_duration, keywords):
     headers = {"Authorization": api_key}
     shorts = []
     for keyword in keywords:
-        params = {"query": keyword, "per_page": 40}
+        params = {"query": keyword, "per_page": 30}
         resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
         try:
             videos = resp.json().get('videos', [])
@@ -136,7 +116,7 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
         params = {
             "key": api_key,
             "q": keyword,
-            "per_page": 40,
+            "per_page": 30,
             "video_type": "film",
             "safesearch": "true"
         }
@@ -194,7 +174,7 @@ def ken_burns_effect(clip, zoom=1.1, pan_direction='left'):
         return clip.fx(vfx.crop, x1=0, y1=0, x2=int(w*(1-1/zoom)), y2=0).fx(vfx.resize, width=w)
     elif pan_direction == 'right':
         return clip.fx(vfx.crop, x1=int(w*(1-1/zoom)), y1=0, x2=0, y2=0).fx(vfx.resize, width=w)
-    else:  # center zoom
+    else:
         return clip.fx(vfx.resize, lambda t: 1 + (zoom-1)*t/clip.duration)
 
 def add_vignette(clip, strength=0.6):
@@ -210,23 +190,21 @@ def add_vignette(clip, strength=0.6):
         return image
     return clip.fl_image(vignette)
 
-def montage_effects(clip, effect_name="random"):
-    effects = [
-        lambda c: c.fx(vfx.fadein, 1),
-        lambda c: c.fx(vfx.fadeout, 1),
-        lambda c: c.fx(vfx.blackwhite),
-        lambda c: c.fl_image(lambda img: blur_frame(img, ksize=15)),
-        lambda c: ken_burns_effect(c, zoom=1.13, pan_direction=random.choice(['left','right','center'])),
-        lambda c: add_vignette(c, strength=0.3),
-    ]
-    if effect_name == "random":
-        return random.choice(effects)(clip)
-    else:
-        return effects[0](clip)
+def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strength, blur_strength):
+    # التأثيرات حسب اختيار المستخدم
+    if do_blur:
+        clip = clip.fl_image(lambda img: blur_frame(img, ksize=int(blur_strength)))
+    if do_zoom:
+        clip = ken_burns_effect(clip, zoom=1.13, pan_direction=random.choice(['left','right','center']))
+    if do_vignette:
+        clip = add_vignette(clip, strength=vignette_strength)
+    if do_bw:
+        clip = clip.fx(vfx.blackwhite)
+    return clip
 
 # ------------ واجهة المستخدم ------------
-st.set_page_config(page_title="فيديو قرآن شورتس بتأثيرات", layout="centered")
-st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية مناسبة وتأثيرات مونتاج")
+st.set_page_config(page_title="فيديو قرآن شورتس ذكي", layout="centered")
+st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية ذكية وتأثيرات متقدمة")
 
 qari_names = [q["name"] for q in QURAA]
 selected_qari_idx = st.selectbox("اختر القارئ:", options=range(len(qari_names)), format_func=lambda i: qari_names[i])
@@ -241,23 +219,42 @@ with col1:
 with col2:
     to_ayah = st.number_input("إلى الآية رقم:", min_value=from_ayah, max_value=ayah_count, value=from_ayah)
 
-add_blur = st.checkbox("تفعيل الضباب (Blur) على الفيديو؟", value=True)
-add_echo_effect = st.checkbox("تفعيل الصدى (Echo) على الصوت؟", value=True)
-add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (أبيض وأسود/تدرج حواف/زوم...)", value=True)
-
 video_sources = st.multiselect(
     "اختر مصادر الفيديو (يمكنك تحديد أكثر من مصدر):",
     options=["Pexels", "Pixabay"],
     default=["Pexels", "Pixabay"]
 )
 
+st.markdown("**خيارات تخصيص المؤثرات**:")
+
+col3, col4, col5 = st.columns(3)
+with col3:
+    video_speed = st.slider("سرعة الفيديو", 0.5, 2.0, 1.0, 0.05)
+with col4:
+    blur_strength = st.slider("شدة الضباب (Blur)", 0, 50, 15)
+with col5:
+    vignette_strength = st.slider("قوة التدرج اللوني (Vignette)", 0.0, 1.0, 0.3)
+
+do_bw = st.checkbox("أبيض وأسود", False)
+do_vignette = st.checkbox("تدرج لوني حول الحواف", True)
+do_zoom = st.checkbox("تأثير زوم متحرك (Ken Burns)", True)
+do_blur = st.checkbox("ضباب (Blur)", True)
+do_echo = st.checkbox("صدى على الصوت", True)
+
+aspect = st.selectbox("أبعاد الفيديو:", ["عمودي (9:16)", "أفقي (16:9)", "مربع (1:1)"])
+aspect_map = {"عمودي (9:16)": (1080,1920), "أفقي (16:9)": (1920,1080), "مربع (1:1)": (1080,1080)}
+
+uploaded_file = st.file_uploader("ارفع فيديو/صورة خلفية (اختياري)")
+
 if st.button("إنشاء الفيديو"):
     try:
-        st.info("اقتراح المشاهد المناسبة لموضوع الآيات...")
-        keywords = suggest_keywords(sura_idx, from_ayah, to_ayah)
-        st.caption(f"الكلمات المفتاحية المستخدمة: {', '.join(keywords[:10])} ...")
-        
-        with st.spinner("جاري تحميل ودمج الصوت لجميع الآيات..."):
+        st.info("تحليل الآيات وجلب الكلمات المفتاحية الذكية...")
+        # تحليل أول آية فقط - يمكن توسيعه لاحقاً
+        ayah_ar, ayah_en = get_ayah_text_and_translation(sura_idx, from_ayah)
+        keywords = get_keywords_from_cohere(ayah_ar, ayah_en)
+        st.caption("الكلمات المفتاحية الذكية: " + ', '.join(keywords))
+
+        with st.spinner("جاري تحميل ودمج الصوت..."):
             merged = None
             missing_ayahs = []
             default_silence_ms = 3000
@@ -274,64 +271,94 @@ if st.button("إنشاء الفيديو"):
                         segment = AudioSegment.from_mp3(temp_ayah_file.name)
                         segment = trim_silence(segment)
                 merged = segment if merged is None else merged + segment
-
             if not merged:
                 st.error("لم يتم العثور على أي آية صوتية متاحة لهذا القارئ في هذا المقطع.")
                 st.stop()
-            if add_echo_effect:
+            if do_echo:
                 merged = add_echo(merged)
             fade_in_duration_ms = 2000
             fade_out_duration_ms = min(8000, int(len(merged) * 0.4))
             merged = merged.fade_in(fade_in_duration_ms).fade_out(fade_out_duration_ms)
             if missing_ayahs:
-                st.warning(f"بعض الآيات غير متوفرة للقارئ المختار وتم وضع صمت مكانها: {', '.join(str(a) for a in missing_ayahs)}")
+                st.warning(f"بعض الآيات غير متوفرة وتم وضع صمت مكانها: {', '.join(str(a) for a in missing_ayahs)}")
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as merged_file:
                 merged.export(merged_file.name, format="mp3")
                 audio_path = merged_file.name
 
-        audio_clip = AudioFileClip(audio_path)
+        audio_clip = AudioFileClip(audio_path).fx(vfx.speedx, video_speed)
         duration = audio_clip.duration
 
-        with st.spinner("جاري تحميل وتجهيز فيديوهات الخلفية..."):
-            video_clips = []
-            used_links = set()
-            shorts = []
-            if "Pexels" in video_sources:
-                shorts += get_pexels_shorts_videos(PEXELS_API_KEY, duration, keywords)
-            if "Pixabay" in video_sources:
-                shorts += get_pixabay_shorts_videos(PIXABAY_API_KEY, duration, keywords)
+        # معالجة الفيديو/الخلفية
+        resize = aspect_map[aspect]
+        video_clips = []
+        used_links = set()
+        if uploaded_file:
+            # إذا رفع المستخدم فيديو أو صورة - استخدمها كخلفية
+            file_ext = os.path.splitext(uploaded_file.name)[-1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as f:
+                f.write(uploaded_file.read())
+                f.flush()
+                if file_ext.lower() in ['.mp4', '.mov', '.avi']:
+                    user_clip = VideoFileClip(f.name).resize(newsize=resize).subclip(0, min(duration, VideoFileClip(f.name).duration))
+                else:
+                    user_clip = ImageClip(f.name, duration=duration).resize(newsize=resize)
+                video_clips.append(user_clip)
+        else:
+            with st.spinner("جاري تحميل وتجهيز فيديوهات الخلفية..."):
+                shorts = []
+                if "Pexels" in video_sources:
+                    shorts += get_pexels_shorts_videos(PEXELS_API_KEY, duration, keywords)
+                if "Pixabay" in video_sources:
+                    shorts += get_pixabay_shorts_videos(PIXABAY_API_KEY, duration, keywords)
+                random.shuffle(shorts)
+                downloaded_duration = 0.0
+                shorts_index = 0
+                while downloaded_duration < duration and shorts_index < len(shorts):
+                    video_obj = shorts[shorts_index]
+                    link = video_obj["link"]
+                    shorts_index += 1
+                    if link in used_links:
+                        continue
+                    clip, fname = download_and_get_clip(link, used_links, resize=resize)
+                    if not clip:
+                        continue
+                    # تخصيص التأثيرات
+                    clip = montage_effects(
+                        clip,
+                        do_bw=do_bw,
+                        do_vignette=do_vignette,
+                        do_zoom=do_zoom,
+                        do_blur=do_blur,
+                        vignette_strength=vignette_strength,
+                        blur_strength=blur_strength
+                    )
+                    if downloaded_duration + clip.duration > duration:
+                        clip = clip.subclip(0, duration-downloaded_duration)
+                    video_clips.append(clip)
+                    downloaded_duration += clip.duration
+                if not video_clips or downloaded_duration < duration:
+                    st.error("لم يتم العثور على فيديوهات كافية أو مناسبة لتغطية مدة الصوت. حاول مجددًا أو قلل المقطع الصوتي.")
+                    st.stop()
 
-            random.shuffle(shorts)
-            downloaded_duration = 0.0
-            shorts_index = 0
-            while downloaded_duration < duration and shorts_index < len(shorts):
-                video_obj = shorts[shorts_index]
-                link = video_obj["link"]
-                shorts_index += 1
-                if link in used_links:
-                    continue
-                clip, fname = download_and_get_clip(link, used_links)
-                if not clip:
-                    continue
-                if add_blur:
-                    clip = clip.fl_image(lambda image: blur_frame(image, ksize=15))
-                if add_montage_fx:
-                    clip = montage_effects(clip, effect_name="random")
-                if downloaded_duration + clip.duration > duration:
-                    clip = clip.subclip(0, duration-downloaded_duration)
-                video_clips.append(clip)
-                downloaded_duration += clip.duration
-            if not video_clips or downloaded_duration < duration:
-                st.error("لم يتم العثور على فيديوهات كافية أو مناسبة لتغطية مدة الصوت. حاول مجددًا أو غيّر المصدر أو قلل المقطع الصوتي.")
-                st.stop()
-            final_video = concatenate_videoclips(video_clips).subclip(0, duration)
-
+        final_video = concatenate_videoclips(video_clips).subclip(0, duration).fx(vfx.speedx, video_speed)
         final = final_video.set_audio(audio_clip).set_duration(duration)
         output_path = "quran_shorts.mp4"
-        final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+
+        with st.spinner("جاري تصدير الفيديو النهائي..."):
+            final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
         st.success("تم إنشاء الفيديو بنجاح!")
         st.video(output_path)
         with open(output_path, "rb") as f:
             st.download_button("تحميل الفيديو", f, file_name="quran_shorts.mp4", mime="video/mp4")
+
+        # تنظيف الملفات المؤقتة
+        try:
+            os.remove(audio_path)
+            for clip in video_clips:
+                if hasattr(clip, 'filename') and os.path.exists(clip.filename):
+                    os.remove(clip.filename)
+        except Exception:
+            pass
+
     except Exception as e:
         st.error(f"حدث خطأ: {e}")
