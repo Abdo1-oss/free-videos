@@ -58,13 +58,16 @@ SURA_AYAHS = [
 
 def is_haram_video(video_text):
     people_keywords = [
-        "person","people","man","woman","boy","girl","child","men","women","kids","kid","human","face",
-        "portrait","selfie","friends","couple","wedding","bride","groom","student","students","woman face"
+        "person","people","man","woman","women","men","boy","girl","child","children","kids","kid",
+        "human","face","portrait","selfie","friends","couple","wedding","bride","groom","student","students",
+        "woman face","body","guy","lady","adult","teen","smile","posing","model","family","father","mother","son","daughter",
+        "group","crowd","head","eyes","mouth","nose","skin","baby","babies"
     ]
     haram_keywords = [
         "cross","church","pork","alcohol","beer","wine","christ","statue","idol","jesus","dance","music","singer","band",
         "gambling","casino","nude","naked","bikini","swimsuit","sexy","kiss","romance","dating","halloween","zombie","devil","witch"
     ]
+    video_text = video_text.lower()
     return any(word in video_text for word in people_keywords + haram_keywords)
 
 def is_shorts(width, height, duration, min_duration=7, max_duration=120):
@@ -90,7 +93,7 @@ Verse: {arabic}
 Translation: {english}
 List only the keywords, comma-separated:"""
     response = co.generate(
-        model="command",  # نموذج مدعوم
+        model="command",
         prompt=prompt,
         max_tokens=60,
         temperature=0.3,
@@ -113,7 +116,8 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
             desc = (v.get("description") or "").lower()
             user_name = (v.get("user", {}).get("name") or "").lower()
             tags = [t.lower() for t in v.get("tags",[])]
-            text = " ".join(tags) + " " + desc + " " + user_name
+            title = (v.get("title") or "").lower()
+            text = " ".join(tags) + " " + desc + " " + user_name + " " + title
             if is_haram_video(text):
                 continue
             for file in v["video_files"]:
@@ -138,7 +142,10 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
         except Exception:
             continue
         for v in videos:
-            text = (v.get("tags") or "").lower() + " " + (v.get("user") or "").lower()
+            tags = (v.get("tags") or "").lower()
+            user = (v.get("user") or "").lower()
+            title = (v.get("title") or "").lower()
+            text = tags + " " + user + " " + title
             if is_haram_video(text):
                 continue
             for vid in v["videos"].values():
@@ -313,7 +320,7 @@ if st.button("إنشاء الفيديو"):
             if do_echo:
                 merged = add_echo(merged)
             fade_in_duration_ms = 2000
-            fade_out_duration_ms = min(8000, int(len(merged) * 0.4))
+            fade_out_duration_ms = min(2000, int(len(merged) * 0.1))  # تقليل مدة اختفاء الصوت في النهاية
             merged = merged.fade_in(fade_in_duration_ms).fade_out(fade_out_duration_ms)
             if missing_ayahs:
                 st.warning(f"بعض الآيات غير متوفرة وتم وضع صمت مكانها: {', '.join(str(a) for a in missing_ayahs)}")
