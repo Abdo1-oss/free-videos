@@ -53,12 +53,12 @@ SURA_AYAHS = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
 ]
 
-def is_people_video(video_text):
+# فلترة الفيديوهات: أشخاص أو أشياء مخالفة
+def is_haram_video(video_text):
     people_keywords = [
         "person","people","man","woman","boy","girl","child","men","women","kids","kid","human","face",
         "portrait","selfie","friends","couple","wedding","bride","groom","student","students","woman face"
     ]
-    # كلمات تخالف الشريعة أو تشير لأشياء محرمة
     haram_keywords = [
         "cross","church","pork","alcohol","beer","wine","christ","statue","idol","jesus","dance","music","singer","band",
         "gambling","casino","nude","naked","bikini","swimsuit","sexy","kiss","romance","dating","halloween","zombie","devil","witch"
@@ -69,29 +69,22 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-# ------------------ اقتراح كلمات مفتاحية بناءً على الآيات ------------------
 def suggest_keywords(sura_idx, from_ayah, to_ayah):
-    # قائمة كلمات مفتاحية شائعة
     generic_keywords = [
         "nature", "mountain", "river", "sea", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
         "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks",
         "moon", "stars", "sun", "night", "light", "storm", "planet", "space", "galaxy", "universe",
-        "space", "planet", "nebula", "stars", "galaxy", "universe", "cosmos", "astronomy", "earth", "moon"
+        "space", "planet", "nebula", "stars", "galaxy", "universe", "cosmos", "astronomy", "earth", "moon",
+        "grave", "graves", "tomb", "cemetery", "gravesite", "graveyard"
     ]
-    # كلمات فضاء، كواكب، قبور
     space_keywords = ["space", "universe", "galaxy", "cosmos", "nebula", "planets", "planet", "stars", "astronomy", "moon", "earth", "solar system"]
     graves_keywords = ["grave", "graves", "tomb", "cemetery", "gravesite", "graveyard"]
-    # كلمات لمشاهد يوم القيامة أو البعث أو الآخرة
-    qiyamah_keywords = ["judgement day", "apocalypse", "resurrection", "afterlife", "hereafter", "heaven", "hell", "dark clouds", "storm", "lightning", "end times"]
-    
-    # تحليل سطحي للسورة/الآيات
-    # (يمكنك إضافة المزيد من السور والتحليل حسب الحاجة)
+    qiyamah_keywords = ["judgement day", "apocalypse", "resurrection", "afterlife", "hereafter", "heaven", "hell", "dark clouds", "storm", "end times"]
+
     sura_name = SURA_NAMES[sura_idx-1]
     ayat_text = ""
     try:
-        # جلب نص الآيات من api
         from_ = int(from_ayah)
-        to_ = int(to_ayah)
         url = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{from_}/ar"
         r = requests.get(url)
         if r.ok:
@@ -106,16 +99,13 @@ def suggest_keywords(sura_idx, from_ayah, to_ayah):
         keywords += space_keywords
     if ("قبر" in ayat_text) or (sura_name in ["التكاثر", "الزلزلة", "القارعة"]):
         keywords += graves_keywords
-    # تحليل كلمات الآية
     if any(word in ayat_text for word in ["نجوم", "كواكب", "شمس", "قمر", "سحاب", "فضاء", "سماء", "ليل", "نهار", "ظلام", "نور"]):
         keywords += space_keywords
     if any(word in ayat_text for word in ["قبر", "قبور", "موت", "عظام", "تراب"]):
         keywords += graves_keywords
     if any(word in ayat_text for word in ["بحر", "ماء", "أنهار"]):
         keywords += ["sea", "ocean", "river", "water", "waves", "rain"]
-    # لا تكرر الكلمات
-    keywords = list(set(keywords))
-    return keywords
+    return list(set(keywords))
 
 def get_pexels_shorts_videos(api_key, needed_duration, keywords):
     headers = {"Authorization": api_key}
@@ -132,7 +122,7 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
             user_name = (v.get("user", {}).get("name") or "").lower()
             tags = [t.lower() for t in v.get("tags",[])]
             text = " ".join(tags) + " " + desc + " " + user_name
-            if is_people_video(text):
+            if is_haram_video(text):
                 continue
             for file in v["video_files"]:
                 if file["quality"]=="hd" and is_shorts(file["width"], file["height"], v["duration"]):
@@ -157,7 +147,7 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
             continue
         for v in videos:
             text = (v.get("tags") or "").lower() + " " + (v.get("user") or "").lower()
-            if is_people_video(text):
+            if is_haram_video(text):
                 continue
             for vid in v["videos"].values():
                 if is_shorts(vid["width"], vid["height"], v["duration"]):
@@ -198,7 +188,6 @@ def add_echo(sound, delay=250, attenuation=0.6):
 def blur_frame(img, ksize=15):
     return cv2.GaussianBlur(img, (ksize|1, ksize|1), 0)
 
-# Ken Burns (Zoom & Pan) effect
 def ken_burns_effect(clip, zoom=1.1, pan_direction='left'):
     w, h = clip.size
     if pan_direction == 'left':
@@ -208,7 +197,6 @@ def ken_burns_effect(clip, zoom=1.1, pan_direction='left'):
     else:  # center zoom
         return clip.fx(vfx.resize, lambda t: 1 + (zoom-1)*t/clip.duration)
 
-# Vignette (تدرج لوني عند الحواف)
 def add_vignette(clip, strength=0.6):
     import numpy as np
     def vignette(image):
@@ -223,7 +211,6 @@ def add_vignette(clip, strength=0.6):
     return clip.fl_image(vignette)
 
 def montage_effects(clip, effect_name="random"):
-    # قائمة التأثيرات بدون أي تأثير لوني يسبب زرقة أو تشبع غير مرغوب
     effects = [
         lambda c: c.fx(vfx.fadein, 1),
         lambda c: c.fx(vfx.fadeout, 1),
@@ -239,7 +226,7 @@ def montage_effects(clip, effect_name="random"):
 
 # ------------ واجهة المستخدم ------------
 st.set_page_config(page_title="فيديو قرآن شورتس بتأثيرات", layout="centered")
-st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية جميلة وتأثيرات مونتاج")
+st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية مناسبة وتأثيرات مونتاج")
 
 qari_names = [q["name"] for q in QURAA]
 selected_qari_idx = st.selectbox("اختر القارئ:", options=range(len(qari_names)), format_func=lambda i: qari_names[i])
@@ -256,7 +243,7 @@ with col2:
 
 add_blur = st.checkbox("تفعيل الضباب (Blur) على الفيديو؟", value=True)
 add_echo_effect = st.checkbox("تفعيل الصدى (Echo) على الصوت؟", value=True)
-add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (لون/تباين/تكبير/تدرج حواف...)", value=True)
+add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (أبيض وأسود/تدرج حواف/زوم...)", value=True)
 
 video_sources = st.multiselect(
     "اختر مصادر الفيديو (يمكنك تحديد أكثر من مصدر):",
@@ -266,8 +253,7 @@ video_sources = st.multiselect(
 
 if st.button("إنشاء الفيديو"):
     try:
-        # --------- اقتراح الكلمات المفتاحية للبحث ----------
-        st.info("جاري اقتراح المشاهد المناسبة لموضوع الآيات...")
+        st.info("اقتراح المشاهد المناسبة لموضوع الآيات...")
         keywords = suggest_keywords(sura_idx, from_ayah, to_ayah)
         st.caption(f"الكلمات المفتاحية المستخدمة: {', '.join(keywords[:10])} ...")
         
@@ -294,7 +280,6 @@ if st.button("إنشاء الفيديو"):
                 st.stop()
             if add_echo_effect:
                 merged = add_echo(merged)
-            # تلاشي تدريجي في النهاية أطول (8 ثوان أو 40% من مدة الصوت)
             fade_in_duration_ms = 2000
             fade_out_duration_ms = min(8000, int(len(merged) * 0.4))
             merged = merged.fade_in(fade_in_duration_ms).fade_out(fade_out_duration_ms)
