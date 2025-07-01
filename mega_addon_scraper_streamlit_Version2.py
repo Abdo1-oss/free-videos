@@ -21,9 +21,23 @@ QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
     {"name": "المنشاوي مرتل", "id": "Minshawy_Murattal_128kbps"},
     {"name": "عبد الباسط مرتل", "id": "Abdul_Basit_Murattal_64kbps"},
+    {"name": "الغامدي", "id": "Ghamadi_40kbps"},
     {"name": "المعيقلي", "id": "MaherAlMuaiqly_64kbps"},
-    {"name": "العفاسي", "id": "Alafasy_64kbps"}
-    # يمكنك إضافة المزيد
+    {"name": "العفاسي", "id": "Alafasy_64kbps"},
+    {"name": "الشريم", "id": "Shuraym_64kbps"},
+    {"name": "فارس عباد", "id": "Fares_Abbad_64kbps"},
+    {"name": "الشاطري", "id": "Shatri_64kbps"},
+    {"name": "أبو بكر الشاطري", "id": "Abu_Bakr_Ash-Shaatree_128kbps"},
+    {"name": "محمد أيوب", "id": "Muhammad_Ayyoub_128kbps"},
+    {"name": "ياسر الدوسري", "id": "Yasser_Ad-Dussary_128kbps"},
+    {"name": "أحمد العجمي", "id": "Ajamy_64kbps"},
+    {"name": "إدريس أبكر", "id": "Idrees_Abkar_48kbps"},
+    {"name": "خليفة الطنيجي", "id": "Tunaiji_64kbps"},
+    {"name": "عبد الله بصفر", "id": "Basfar_48kbps"},
+    {"name": "الحصري مجود", "id": "Husary_Mujawwad_128kbps"},
+    {"name": "محمد جبريل", "id": "Jibreel_64kbps"},
+    {"name": "علي جابر", "id": "Ali_Jaber_64kbps"},
+    {"name": "المنشاوي مجود", "id": "Minshawy_Mujawwad_128kbps"}
 ]
 SURA_NAMES = [
     "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام", "الأعراف", "الأنفال", "التوبة", "يونس", "هود", "يوسف", "الرعد",
