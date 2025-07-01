@@ -5,7 +5,7 @@ import random
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx, TextClip, CompositeVideoClip, ImageClip
+    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx
 )
 import cv2
 
@@ -58,18 +58,67 @@ def is_people_video(video_text):
         "person","people","man","woman","boy","girl","child","men","women","kids","kid","human","face",
         "portrait","selfie","friends","couple","wedding","bride","groom","student","students","woman face"
     ]
-    return any(word in video_text for word in people_keywords)
+    # كلمات تخالف الشريعة أو تشير لأشياء محرمة
+    haram_keywords = [
+        "cross","church","pork","alcohol","beer","wine","christ","statue","idol","jesus","dance","music","singer","band",
+        "gambling","casino","nude","naked","bikini","swimsuit","sexy","kiss","romance","dating","halloween","zombie","devil","witch"
+    ]
+    return any(word in video_text for word in people_keywords + haram_keywords)
 
 def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-def get_pexels_shorts_videos(api_key, needed_duration):
-    headers = {"Authorization": api_key}
-    keywords = [
-        "mountain", "river", "sea", "flowers", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
-        "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks"
+# ------------------ اقتراح كلمات مفتاحية بناءً على الآيات ------------------
+def suggest_keywords(sura_idx, from_ayah, to_ayah):
+    # قائمة كلمات مفتاحية شائعة
+    generic_keywords = [
+        "nature", "mountain", "river", "sea", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
+        "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks",
+        "moon", "stars", "sun", "night", "light", "storm", "planet", "space", "galaxy", "universe",
+        "space", "planet", "nebula", "stars", "galaxy", "universe", "cosmos", "astronomy", "earth", "moon"
     ]
+    # كلمات فضاء، كواكب، قبور
+    space_keywords = ["space", "universe", "galaxy", "cosmos", "nebula", "planets", "planet", "stars", "astronomy", "moon", "earth", "solar system"]
+    graves_keywords = ["grave", "graves", "tomb", "cemetery", "gravesite", "graveyard"]
+    # كلمات لمشاهد يوم القيامة أو البعث أو الآخرة
+    qiyamah_keywords = ["judgement day", "apocalypse", "resurrection", "afterlife", "hereafter", "heaven", "hell", "dark clouds", "storm", "lightning", "end times"]
+    
+    # تحليل سطحي للسورة/الآيات
+    # (يمكنك إضافة المزيد من السور والتحليل حسب الحاجة)
+    sura_name = SURA_NAMES[sura_idx-1]
+    ayat_text = ""
+    try:
+        # جلب نص الآيات من api
+        from_ = int(from_ayah)
+        to_ = int(to_ayah)
+        url = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{from_}/ar"
+        r = requests.get(url)
+        if r.ok:
+            ayat_text = r.json().get("data", {}).get("text", "")
+    except Exception:
+        pass
+    
+    keywords = generic_keywords.copy()
+    if sura_name in ["الأنبياء", "الرحمن", "القيامة", "الواقعة", "الحاقة", "المعارج", "النبأ", "الزلزلة", "القارعة", "التكوير", "الانفطار", "المطففين", "الانشقاق"]:
+        keywords += qiyamah_keywords
+    if sura_name in ["الشمس", "القمر", "النجم", "الكهف", "الإسراء", "الحديد", "يس", "الصافات"]:
+        keywords += space_keywords
+    if ("قبر" in ayat_text) or (sura_name in ["التكاثر", "الزلزلة", "القارعة"]):
+        keywords += graves_keywords
+    # تحليل كلمات الآية
+    if any(word in ayat_text for word in ["نجوم", "كواكب", "شمس", "قمر", "سحاب", "فضاء", "سماء", "ليل", "نهار", "ظلام", "نور"]):
+        keywords += space_keywords
+    if any(word in ayat_text for word in ["قبر", "قبور", "موت", "عظام", "تراب"]):
+        keywords += graves_keywords
+    if any(word in ayat_text for word in ["بحر", "ماء", "أنهار"]):
+        keywords += ["sea", "ocean", "river", "water", "waves", "rain"]
+    # لا تكرر الكلمات
+    keywords = list(set(keywords))
+    return keywords
+
+def get_pexels_shorts_videos(api_key, needed_duration, keywords):
+    headers = {"Authorization": api_key}
     shorts = []
     for keyword in keywords:
         params = {"query": keyword, "per_page": 40}
@@ -91,11 +140,7 @@ def get_pexels_shorts_videos(api_key, needed_duration):
                     break
     return shorts
 
-def get_pixabay_shorts_videos(api_key, needed_duration):
-    keywords = [
-        "mountain", "river", "sea", "flowers", "forest", "lake", "desert", "sunset", "waterfall", "clouds",
-        "meadow", "valley", "rain", "sky", "island", "garden", "trees", "ocean", "snow", "rocks"
-    ]
+def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
     shorts = []
     for keyword in keywords:
         params = {
@@ -177,22 +222,9 @@ def add_vignette(clip, strength=0.6):
         return image
     return clip.fl_image(vignette)
 
-# نص متحرك
-def add_text_clip(clip, text, fontsize=60, duration=5):
-    try:
-        txt_clip = TextClip(text, fontsize=fontsize, color='white', font='Amiri-Bold', bg_color='rgba(0,0,0,0.3)')
-    except:
-        txt_clip = TextClip(text, fontsize=fontsize, color='white', bg_color='rgba(0,0,0,0.3)')
-    txt_clip = txt_clip.set_position(('center','bottom')).set_duration(duration).crossfadein(1)
-    composite = CompositeVideoClip([clip, txt_clip.set_start(0)])
-    return composite.set_duration(clip.duration)
-
-# جاما، تباين، سطوع، أبيض وأسود ...إلخ
 def montage_effects(clip, effect_name="random"):
+    # قائمة التأثيرات بدون أي تأثير لوني يسبب زرقة أو تشبع غير مرغوب
     effects = [
-        lambda c: c.fx(vfx.colorx, 1.2),
-        lambda c: c.fx(vfx.lum_contrast, 0, 50, 128),
-        lambda c: c.fx(vfx.gamma_corr, 1.1),
         lambda c: c.fx(vfx.fadein, 1),
         lambda c: c.fx(vfx.fadeout, 1),
         lambda c: c.fx(vfx.blackwhite),
@@ -202,10 +234,6 @@ def montage_effects(clip, effect_name="random"):
     ]
     if effect_name == "random":
         return random.choice(effects)(clip)
-    elif effect_name == "bw":
-        return clip.fx(vfx.blackwhite)
-    elif effect_name == "bright":
-        return clip.fx(vfx.colorx, 1.2)
     else:
         return effects[0](clip)
 
@@ -229,11 +257,20 @@ with col2:
 add_blur = st.checkbox("تفعيل الضباب (Blur) على الفيديو؟", value=True)
 add_echo_effect = st.checkbox("تفعيل الصدى (Echo) على الصوت؟", value=True)
 add_montage_fx = st.checkbox("تفعيل تأثيرات مونتاج الفيديو (لون/تباين/تكبير/تدرج حواف...)", value=True)
-add_text_fx = st.checkbox("إظهار اسم السورة والقارئ في بداية الفيديو", value=True)
-video_source = st.selectbox("اختر مصدر الفيديو:", ["Pexels", "Pixabay"])
+
+video_sources = st.multiselect(
+    "اختر مصادر الفيديو (يمكنك تحديد أكثر من مصدر):",
+    options=["Pexels", "Pixabay"],
+    default=["Pexels", "Pixabay"]
+)
 
 if st.button("إنشاء الفيديو"):
     try:
+        # --------- اقتراح الكلمات المفتاحية للبحث ----------
+        st.info("جاري اقتراح المشاهد المناسبة لموضوع الآيات...")
+        keywords = suggest_keywords(sura_idx, from_ayah, to_ayah)
+        st.caption(f"الكلمات المفتاحية المستخدمة: {', '.join(keywords[:10])} ...")
+        
         with st.spinner("جاري تحميل ودمج الصوت لجميع الآيات..."):
             merged = None
             missing_ayahs = []
@@ -257,8 +294,9 @@ if st.button("إنشاء الفيديو"):
                 st.stop()
             if add_echo_effect:
                 merged = add_echo(merged)
+            # تلاشي تدريجي في النهاية أطول (8 ثوان أو 40% من مدة الصوت)
             fade_in_duration_ms = 2000
-            fade_out_duration_ms = 3000
+            fade_out_duration_ms = min(8000, int(len(merged) * 0.4))
             merged = merged.fade_in(fade_in_duration_ms).fade_out(fade_out_duration_ms)
             if missing_ayahs:
                 st.warning(f"بعض الآيات غير متوفرة للقارئ المختار وتم وضع صمت مكانها: {', '.join(str(a) for a in missing_ayahs)}")
@@ -272,12 +310,11 @@ if st.button("إنشاء الفيديو"):
         with st.spinner("جاري تحميل وتجهيز فيديوهات الخلفية..."):
             video_clips = []
             used_links = set()
-            if video_source == "Pexels":
-                shorts = get_pexels_shorts_videos(PEXELS_API_KEY, duration)
-            elif video_source == "Pixabay":
-                shorts = get_pixabay_shorts_videos(PIXABAY_API_KEY, duration)
-            else:
-                shorts = []
+            shorts = []
+            if "Pexels" in video_sources:
+                shorts += get_pexels_shorts_videos(PEXELS_API_KEY, duration, keywords)
+            if "Pixabay" in video_sources:
+                shorts += get_pixabay_shorts_videos(PIXABAY_API_KEY, duration, keywords)
 
             random.shuffle(shorts)
             downloaded_duration = 0.0
@@ -295,20 +332,14 @@ if st.button("إنشاء الفيديو"):
                     clip = clip.fl_image(lambda image: blur_frame(image, ksize=15))
                 if add_montage_fx:
                     clip = montage_effects(clip, effect_name="random")
-                # لا يتجاوز الطول الكلي المطلوب
                 if downloaded_duration + clip.duration > duration:
                     clip = clip.subclip(0, duration-downloaded_duration)
                 video_clips.append(clip)
                 downloaded_duration += clip.duration
             if not video_clips or downloaded_duration < duration:
-                st.error("لم يتم العثور على فيديوهات كافية أو مناسبة لتغطية مدة الصوت. حاول مجددًا أو غيّر المصدر.")
+                st.error("لم يتم العثور على فيديوهات كافية أو مناسبة لتغطية مدة الصوت. حاول مجددًا أو غيّر المصدر أو قلل المقطع الصوتي.")
                 st.stop()
             final_video = concatenate_videoclips(video_clips).subclip(0, duration)
-
-        # إضافة نص متحرك في البداية (اسم السورة والقارئ)
-        if add_text_fx:
-            text = f"سورة {SURA_NAMES[sura_idx-1]} (آية {from_ayah} إلى {to_ayah}) • القارئ: {qari_names[selected_qari_idx]}"
-            final_video = add_text_clip(final_video, text, fontsize=60, duration=5)
 
         final = final_video.set_audio(audio_clip).set_duration(duration)
         output_path = "quran_shorts.mp4"
