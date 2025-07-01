@@ -6,7 +6,7 @@ import os
 import shutil
 from pydub import AudioSegment, silence
 from moviepy.editor import (
-    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx, CompositeVideoClip, ImageClip
+    VideoFileClip, AudioFileClip, concatenate_videoclips, vfx, CompositeVideoClip, ImageClip, TextClip
 )
 import cv2
 import cohere
@@ -301,9 +301,12 @@ if st.button("إنشاء الفيديو"):
             merged = None
             missing_ayahs = []
             default_silence_ms = 3000
+            ayat_texts = []
             for ayah in range(int(from_ayah), int(to_ayah)+1):
                 mp3_url = f"https://everyayah.com/data/{selected_qari}/{sura_idx:03d}{ayah:03d}.mp3"
                 r = requests.get(mp3_url)
+                ar, _ = get_ayah_text_and_translation(sura_idx, ayah)
+                ayat_texts.append(ar)
                 if r.status_code != 200:
                     missing_ayahs.append(ayah)
                     segment = AudioSegment.silent(duration=default_silence_ms)
@@ -386,10 +389,28 @@ if st.button("إنشاء الفيديو"):
 
         final_video = concatenate_videoclips(video_clips).subclip(0, duration).fx(vfx.speedx, video_speed)
         final = final_video.set_audio(audio_clip).set_duration(duration)
-        output_path = "quran_shorts.mp4"
 
+        # <<< كتابة الآيات Overlay على الفيديو >>>
+        full_text = " ".join(ayat_texts)
+        # تأكد من وجود ملف خط عربي في مشروعك مثل fonts/Amiri-Bold.ttf
+        font_path = "fonts/Amiri-Bold.ttf"
+        if not os.path.exists(font_path):
+            font_path = "Arial"  # fallback إذا لم يوجد الخط العربي، MoviePy سيبحث عن Arial
+        text_clip = TextClip(
+            full_text,
+            fontsize=50,
+            color='white',
+            font=font_path,
+            method='caption',
+            size=(resize[0] - 100, None),
+            align='center'
+        ).set_position(('center', 'bottom')).set_duration(duration).margin(bottom=70, opacity=0)
+
+        final_with_text = CompositeVideoClip([final, text_clip])
+
+        output_path = "quran_shorts.mp4"
         with st.spinner("جاري تصدير الفيديو النهائي..."):
-            final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+            final_with_text.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
         st.success("تم إنشاء الفيديو بنجاح!")
         st.video(output_path)
         with open(output_path, "rb") as f:
