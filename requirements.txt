@@ -4,3 +4,4 @@ pydub
 requests
 ffmpeg
 opencv-python
+cohere
