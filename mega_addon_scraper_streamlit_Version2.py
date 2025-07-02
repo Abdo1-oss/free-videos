@@ -392,7 +392,7 @@ if st.button("إنشاء الفيديو"):
 
         # <<< كتابة الآيات Overlay على الفيديو >>>
         full_text = " ".join(ayat_texts)
-        font_path = "fonts/Amiri-Bold.ttf"
+        font_path = "Amiri-Bold.ttf"
         if not os.path.exists(font_path):
             font_path = "Arial"
         text_clip = TextClip(
