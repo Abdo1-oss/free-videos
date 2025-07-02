@@ -323,7 +323,7 @@ if st.button("إنشاء الفيديو"):
             if do_echo:
                 merged = add_echo(merged)
             fade_in_duration_ms = 2000
-            fade_out_duration_ms = min(2000, int(len(merged) * 0.1))  # تقليل مدة اختفاء الصوت في النهاية
+            fade_out_duration_ms = min(2000, int(len(merged) * 0.1))
             merged = merged.fade_in(fade_in_duration_ms).fade_out(fade_out_duration_ms)
             if missing_ayahs:
                 st.warning(f"بعض الآيات غير متوفرة وتم وضع صمت مكانها: {', '.join(str(a) for a in missing_ayahs)}")
@@ -392,16 +392,15 @@ if st.button("إنشاء الفيديو"):
 
         # <<< كتابة الآيات Overlay على الفيديو >>>
         full_text = " ".join(ayat_texts)
-        # تأكد من وجود ملف خط عربي في مشروعك مثل fonts/Amiri-Bold.ttf
         font_path = "fonts/Amiri-Bold.ttf"
         if not os.path.exists(font_path):
-            font_path = "Arial"  # fallback إذا لم يوجد الخط العربي، MoviePy سيبحث عن Arial
+            font_path = "Arial"
         text_clip = TextClip(
             full_text,
             fontsize=50,
             color='white',
             font=font_path,
-            method='caption',
+            method='pillow',        # استخدام pillow وليس caption
             size=(resize[0] - 100, None),
             align='center'
         ).set_position(('center', 'bottom')).set_duration(duration).margin(bottom=70, opacity=0)
