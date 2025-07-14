@@ -9,3 +9,5 @@ pillow
 arabic-reshaper
 python-bidi
 numpy
+arabic_reshaper
+python-bidi
