@@ -242,10 +242,10 @@ text_img = create_text_image(chunk, (video_w, img_height), font_path, 50)
 
 print("✅ النص قبل التشكيل:", text)
     # ✅ إعادة تشكيل النص العربي ليظهر بالحروف المتصلة والتشكيل
-    reshaped_text = arabic_reshaper.reshape(text)
-    print("✅ بعد reshaping:", reshaped_text)
+reshaped_text = arabic_reshaper.reshape(text)
+print("✅ بعد reshaping:", reshaped_text)
     bidi_text = get_display(reshaped_text)
-    print("✅ بعد bidi (النص النهائي):", bidi_text)
+print("✅ بعد bidi (النص النهائي):", bidi_text)
 
     img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
