@@ -235,9 +235,13 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
 # ----------- الكود المصحح لرسم النص العربي بشكل مشكّل، متصل، RTL -----------
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
+    size = (size[0], 200)  # 🔒 ثبّت الارتفاع إلى 200 بكسل لمنع أخطاء الفيديو
+    print("✅ النص قبل التشكيل:", text)
     # ✅ إعادة تشكيل النص العربي ليظهر بالحروف المتصلة والتشكيل
     reshaped_text = arabic_reshaper.reshape(text)
+    print("✅ بعد reshaping:", reshaped_text)
     bidi_text = get_display(reshaped_text)
+    print("✅ بعد bidi (النص النهائي):", bidi_text)
 
     img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
