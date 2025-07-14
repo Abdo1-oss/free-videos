@@ -1,3 +1,4 @@
+from Thumbnail_Filter import detect_faces_from_thumbnail
 import streamlit as st
 import requests
 import tempfile
@@ -127,14 +128,10 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
             videos = resp.json().get('videos', [])
         except Exception:
             continue
-        for v in videos:
-            desc = (v.get("description") or "")
-            user_name = (v.get("user", {}).get("name") or "")
-            tags = [t for t in v.get("tags", [])]
-            title = (v.get("title") or "")
-            text = " ".join(tags) + " " + desc + " " + user_name + " " + title
-            if contains_people_or_text(text):
-                continue
+       for v in videos:
+    thumbnail_url = v.get("image") or ""
+    if thumbnail_url and detect_faces_from_thumbnail(thumbnail_url):
+        continue
             best_file = get_best_video_file(v["video_files"])
             if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
                 shorts.append({"link": best_file["link"], "duration": v["duration"], "title": v.get("description", '')})
@@ -156,12 +153,11 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
         except Exception:
             continue
         for v in videos:
-            tags = (v.get("tags") or "")
-            user = (v.get("user") or "")
-            title = (v.get("title") or "")
-            text = tags + " " + user + " " + title
-            if contains_people_or_text(text):
-                continue
+    thumbnail_id = v.get("picture_id")
+    if thumbnail_id:
+        thumbnail_url = f"https://i.vimeocdn.com/video/{thumbnail_id}_640x360.jpg"
+        if detect_faces_from_thumbnail(thumbnail_url):
+            continue
             best_file = None
             for quality, vid in v["videos"].items():
                 if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
