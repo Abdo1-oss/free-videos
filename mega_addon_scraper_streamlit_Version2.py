@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import tempfile
 import random
-import shutil
 import os
 from pydub import AudioSegment, silence
 from moviepy.editor import (
@@ -18,7 +17,6 @@ COHERE_API_KEY = "K1GW0y2wWiwW7xlK7db7zZnqX7sxfRVGiWopVfCD"
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 PIXABAY_API_KEY = "50380897-76243eaec536038f687ff8e15"
 
-# ------------ قائمة الشيوخ الكاملة ------------
 QURAA = [
     {"name": "الحصري مرتل", "id": "Husary_64kbps"},
     {"name": "المنشاوي مرتل", "id": "Minshawy_Murattal_128kbps"},
@@ -79,33 +77,14 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
-def get_ayah_text_and_translation(sura_idx, ayah_num):
-    arabic, english = "", ""
-    url_ar = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/ar"
-    r_ar = requests.get(url_ar)
-    if r_ar.ok:
-        arabic = r_ar.json().get("data", {}).get("text", "")
-    url_en = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/en.asad"
-    r_en = requests.get(url_en)
-    if r_en.ok:
-        english = r_en.json().get("data", {}).get("text", "")
-    return arabic, english
-
-def get_keywords_from_cohere(arabic, english):
-    co = cohere.Client(COHERE_API_KEY)
-    prompt = f"""Given this Quran verse and its English translation, suggest 7-10 English visual keywords suitable for searching background videos (avoid humans, faces, people, and forbidden things).
-Verse: {arabic}
-Translation: {english}
-List only the keywords, comma-separated:"""
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=60,
-        temperature=0.3,
-        stop_sequences=["\n"]
-    )
-    kws = response.generations[0].text.strip()
-    return [k.strip() for k in kws.replace('\n','').split(',') if k.strip()]
+def get_best_video_file(video_files):
+    """اختر ملف فيديو بجودة 360 أو أعلى، يفضل الأقل إذا تعددت"""
+    best = None
+    for f in sorted(video_files, key=lambda vf: vf['height']):
+        if f['height'] >= 360:
+            if not best or f['height'] < best['height']:
+                best = f
+    return best
 
 def get_pexels_shorts_videos(api_key, needed_duration, keywords):
     headers = {"Authorization": api_key}
@@ -125,10 +104,9 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
             text = " ".join(tags) + " " + desc + " " + user_name + " " + title
             if contains_people(text):
                 continue
-            for file in v["video_files"]:
-                if file["quality"] == "hd" and is_shorts(file["width"], file["height"], v["duration"]):
-                    shorts.append({"link": file["link"], "duration": v["duration"], "title": v.get("description",'')})
-                    break
+            best_file = get_best_video_file(v["video_files"])
+            if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
+                shorts.append({"link": best_file["link"], "duration": v["duration"], "title": v.get("description",'')})
     return shorts
 
 def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
@@ -153,10 +131,13 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
             text = tags + " " + user + " " + title
             if contains_people(text):
                 continue
-            for vid in v["videos"].values():
-                if is_shorts(vid["width"], vid["height"], v["duration"]):
-                    shorts.append({"link": vid["url"], "duration": v["duration"], "title": v.get("tags",'')})
-                    break
+            # pixabay videos: 'videos' dict of multiple qualities
+            best_file = None
+            for quality, vid in v["videos"].items():
+                if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
+                    best_file = vid
+            if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
+                shorts.append({"link": best_file["url"], "duration": v["duration"], "title": v.get("tags",'')})
     return shorts
 
 def get_mixkit_shorts_videos(needed_duration, keywords):
@@ -259,13 +240,11 @@ def create_text_image(text, size, font_path="Arial", fontsize=50):
         font = ImageFont.truetype(font_path, fontsize)
     except:
         font = ImageFont.load_default()
-    # دعم النصوص الطويلة والوسط
     lines = []
     words = text.split()
     line = ""
     for word in words:
         test_line = line + " " + word if line != "" else word
-        # استخدم textbbox أو getsize حسب الإصدار
         try:
             bbox = draw.textbbox((0, 0), test_line, font=font)
             w = bbox[2] - bbox[0]
@@ -290,8 +269,76 @@ def create_text_image(text, size, font_path="Arial", fontsize=50):
         y += fontsize + 5
     return np.array(img)
 
+def split_text_for_timings(full_text, words_per_clip=4):
+    words = full_text.split()
+    clips = []
+    i = 0
+    while i < len(words):
+        clips.append(" ".join(words[i:i+words_per_clip]))
+        i += words_per_clip
+    return clips
+
+def prepare_ayah_texts(ayat_texts):
+    bsm = "بسم الله الرحمن الرحيم"
+    output = []
+    joined = " ".join(ayat_texts)
+    if joined.startswith(bsm):
+        output.append(bsm)
+        rest = joined[len(bsm):].strip()
+        if rest:
+            output.extend(split_text_for_timings(rest))
+    else:
+        output.extend(split_text_for_timings(joined))
+    return output
+
+def get_clip_position(position, video_size, text_img_height):
+    w, h = video_size
+    if position == "bottom":
+        return ('center', h - text_img_height//2)
+    elif position == "top":
+        return ('center', 0)
+    else: # center
+        return ('center', (h - text_img_height)//2)
+
+def get_ayah_text_and_translation(sura_idx, ayah_num):
+    arabic, english = "", ""
+    url_ar = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/ar"
+    r_ar = requests.get(url_ar)
+    if r_ar.ok:
+        arabic = r_ar.json().get("data", {}).get("text", "")
+    url_en = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/en.asad"
+    r_en = requests.get(url_en)
+    if r_en.ok:
+        english = r_en.json().get("data", {}).get("text", "")
+    return arabic, english
+
+def get_keywords_from_cohere(arabic, english):
+    co = cohere.Client(COHERE_API_KEY)
+    prompt = f"""Given this Quran verse and its English translation, suggest 7-10 English visual keywords suitable for searching background videos (avoid humans, faces, people, and forbidden things).
+Verse: {arabic}
+Translation: {english}
+List only the keywords, comma-separated:"""
+    response = co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=60,
+        temperature=0.3,
+        stop_sequences=["\n"]
+    )
+    kws = response.generations[0].text.strip()
+    return [k.strip() for k in kws.replace('\n','').split(',') if k.strip()]
+
+# ========== Streamlit App ==========
 st.set_page_config(page_title="فيديو قرآن شورتس ذكي", layout="centered")
 st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية ذكية وتأثيرات متقدمة")
+
+# اختيار مكان النص
+text_position_choice = st.selectbox(
+    "اختر مكان عرض النص على الفيديو",
+    [("أسفل", 'bottom'), ("وسط", 'center'), ("أعلى", 'top')],
+    format_func=lambda x: x[0]
+)
+text_position = text_position_choice[1]
 
 qari_names = [q["name"] for q in QURAA]
 selected_qari_idx = st.selectbox("اختر القارئ:", options=range(len(qari_names)), format_func=lambda i: qari_names[i])
@@ -435,16 +482,30 @@ if st.button("إنشاء الفيديو"):
         final_video = concatenate_videoclips(video_clips).subclip(0, duration).fx(vfx.speedx, video_speed)
         final = final_video.set_audio(audio_clip).set_duration(duration)
 
-        # <<< كتابة الآيات Overlay على الفيديو (بدون TextClip) >>>
-        full_text = " ".join(ayat_texts)
+        # ----------- كتابة النص تدريجيًا -----------
+        text_chunks = prepare_ayah_texts(ayat_texts)
+        chunk_count = len(text_chunks)
+        chunk_duration = duration / chunk_count if chunk_count else duration
+
         font_path = "Amiri-Bold.ttf"
         if not os.path.exists(font_path):
             font_path = "Arial"
         img_height = 200
-        text_img = create_text_image(full_text, (resize[0], img_height), font_path, 50)
-        text_clip = ImageClip(text_img, duration=duration).set_position(('center', 'bottom'))
+        video_w, video_h = resize
 
-        final_with_text = CompositeVideoClip([final, text_clip])
+        text_clips = []
+        for i, chunk in enumerate(text_chunks):
+            text_img = create_text_image(chunk, (video_w, img_height), font_path, 50)
+            start_time = i * chunk_duration
+            end_time = min((i+1) * chunk_duration, duration)
+            text_clip = (
+                ImageClip(text_img, duration=end_time-start_time)
+                .set_start(start_time)
+                .set_position(get_clip_position(text_position, resize, img_height))
+            )
+            text_clips.append(text_clip)
+
+        final_with_text = CompositeVideoClip([final] + text_clips)
 
         output_path = "quran_shorts.mp4"
         with st.spinner("جاري تصدير الفيديو النهائي..."):
