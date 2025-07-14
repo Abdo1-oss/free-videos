@@ -235,7 +235,11 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
 # ----------- الكود المصحح لرسم النص العربي بشكل مشكّل، متصل، RTL -----------
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
-    size = (size[0], 200)  # 🔒 ثبّت الارتفاع إلى 200 بكسل لمنع أخطاء الفيديو
+   img_height = 200
+video_w, video_h = resize
+
+text_img = create_text_image(chunk, (video_w, img_height), font_path, 50)
+
     print("✅ النص قبل التشكيل:", text)
     # ✅ إعادة تشكيل النص العربي ليظهر بالحروف المتصلة والتشكيل
     reshaped_text = arabic_reshaper.reshape(text)
