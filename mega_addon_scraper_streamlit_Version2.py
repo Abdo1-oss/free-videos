@@ -128,7 +128,7 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
             videos = resp.json().get('videos', [])
         except Exception:
             continue
-       for v in videos:
+for v in videos:
     thumbnail_url = v.get("image") or ""
     if thumbnail_url and detect_faces_from_thumbnail(thumbnail_url):
         continue
@@ -152,7 +152,7 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
             videos = resp.json().get("hits", [])
         except Exception:
             continue
-        for v in videos:
+for v in videos:
     thumbnail_id = v.get("picture_id")
     if thumbnail_id:
         thumbnail_url = f"https://i.vimeocdn.com/video/{thumbnail_id}_640x360.jpg"
