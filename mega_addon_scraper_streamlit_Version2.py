@@ -232,6 +232,8 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
         clip = clip.fx(vfx.blackwhite)
     return clip
 
+# ----------- الكود المصحح لرسم النص العربي بشكل مشكّل، متصل، RTL -----------
+
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
@@ -241,11 +243,12 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
         font = ImageFont.truetype(font_path, fontsize)
     except:
         font = ImageFont.load_default()
+    # تقسيم النص لعدة أسطر آلياً من اليمين لليسار
     lines = []
     words = bidi_text.split()
     line = ""
     for word in words:
-        test_line = (line + " " + word) if line else word
+        test_line = word if not line else word + " " + line  # أهم نقطة: اجمع RTL
         try:
             bbox = draw.textbbox((0, 0), test_line, font=font)
             w = bbox[2] - bbox[0]
@@ -260,14 +263,14 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
         lines.append(line)
     total_text_height = len(lines) * fontsize + (len(lines)-1)*5
     y = (size[1] - total_text_height) // 2
-    for l in lines:
+    for l in reversed(lines):  # نعكس الترتيب لأننا جمعنا RTL
         try:
             bbox = draw.textbbox((0, 0), l, font=font)
             w = bbox[2] - bbox[0]
-            h = bbox[3] - bbox[1]
         except AttributeError:
-            w, h = font.getsize(l)
-        draw.text(((size[0]-w)//2, y), l, font=font, fill="white")
+            w, _ = font.getsize(l)
+        x = (size[0]-w)//2
+        draw.text((x, y), l, font=font, fill="white")
         y += fontsize + 5
     return np.array(img)
 
