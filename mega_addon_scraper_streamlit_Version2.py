@@ -258,7 +258,7 @@ except:
 lines = []
 words = bidi_text.split()
 line = ""
-    for word in words:
+for word in words:
         test_line = word if not line else word + " " + line
     try:
         bbox = draw.textbbox((0, 0), test_line, font=font)
