@@ -260,8 +260,8 @@ words = bidi_text.split()
 line = ""
 for word in words:
         test_line = word if not line else word + " " + line
-    try:
-        bbox = draw.textbbox((0, 0), test_line, font=font)
+try:
+    bbox = draw.textbbox((0, 0), test_line, font=font)
 w = bbox[2] - bbox[0]
 except AttributeError:
  w, _ = font.getsize(test_line)
