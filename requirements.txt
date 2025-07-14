@@ -6,3 +6,6 @@ ffmpeg
 opencv-python-headless
 cohere
 pillow
+arabic-reshaper
+python-bidi
+numpy
