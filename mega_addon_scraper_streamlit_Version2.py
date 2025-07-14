@@ -11,6 +11,8 @@ import cv2
 import cohere
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 # ------------ إعدادات API KEYS ------------
 COHERE_API_KEY = "K1GW0y2wWiwW7xlK7db7zZnqX7sxfRVGiWopVfCD"
@@ -78,7 +80,6 @@ def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     return (ratio < 0.7) and (min_duration <= duration <= max_duration)
 
 def get_best_video_file(video_files):
-    """اختر ملف فيديو بجودة 360 أو أعلى، يفضل الأقل إذا تعددت"""
     best = None
     for f in sorted(video_files, key=lambda vf: vf['height']):
         if f['height'] >= 360:
@@ -131,7 +132,6 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
             text = tags + " " + user + " " + title
             if contains_people(text):
                 continue
-            # pixabay videos: 'videos' dict of multiple qualities
             best_file = None
             for quality, vid in v["videos"].items():
                 if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
@@ -210,7 +210,6 @@ def ken_burns_effect(clip, zoom=1.1, pan_direction='left'):
         return clip.fx(vfx.resize, lambda t: 1 + (zoom-1)*t/clip.duration)
 
 def add_vignette(clip, strength=0.6):
-    import numpy as np
     def vignette(image):
         rows, cols = image.shape[:2]
         kernel_x = cv2.getGaussianKernel(cols, 200)
@@ -233,7 +232,9 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
         clip = clip.fx(vfx.blackwhite)
     return clip
 
-def create_text_image(text, size, font_path="Arial", fontsize=50):
+def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
+    reshaped_text = arabic_reshaper.reshape(text)
+    bidi_text = get_display(reshaped_text)
     img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
     try:
@@ -241,10 +242,10 @@ def create_text_image(text, size, font_path="Arial", fontsize=50):
     except:
         font = ImageFont.load_default()
     lines = []
-    words = text.split()
+    words = bidi_text.split()
     line = ""
     for word in words:
-        test_line = line + " " + word if line != "" else word
+        test_line = (line + " " + word) if line else word
         try:
             bbox = draw.textbbox((0, 0), test_line, font=font)
             w = bbox[2] - bbox[0]
@@ -257,7 +258,8 @@ def create_text_image(text, size, font_path="Arial", fontsize=50):
             line = word
     if line:
         lines.append(line)
-    y = size[1] - (len(lines) * fontsize) - 20
+    total_text_height = len(lines) * fontsize + (len(lines)-1)*5
+    y = (size[1] - total_text_height) // 2
     for l in lines:
         try:
             bbox = draw.textbbox((0, 0), l, font=font)
@@ -328,11 +330,11 @@ List only the keywords, comma-separated:"""
     kws = response.generations[0].text.strip()
     return [k.strip() for k in kws.replace('\n','').split(',') if k.strip()]
 
+
 # ========== Streamlit App ==========
 st.set_page_config(page_title="فيديو قرآن شورتس ذكي", layout="centered")
 st.title("أنشئ فيديو قرآن قصير (شورتس) بخلفية ذكية وتأثيرات متقدمة")
 
-# اختيار مكان النص
 text_position_choice = st.selectbox(
     "اختر مكان عرض النص على الفيديو",
     [("أسفل", 'bottom'), ("وسط", 'center'), ("أعلى", 'top')],
@@ -482,12 +484,11 @@ if st.button("إنشاء الفيديو"):
         final_video = concatenate_videoclips(video_clips).subclip(0, duration).fx(vfx.speedx, video_speed)
         final = final_video.set_audio(audio_clip).set_duration(duration)
 
-        # ----------- كتابة النص تدريجيًا -----------
         text_chunks = prepare_ayah_texts(ayat_texts)
         chunk_count = len(text_chunks)
         chunk_duration = duration / chunk_count if chunk_count else duration
 
-        font_path = "Amiri-Bold.ttf"
+        font_path = "Amiri-Regular.ttf"
         if not os.path.exists(font_path):
             font_path = "Arial"
         img_height = 200
