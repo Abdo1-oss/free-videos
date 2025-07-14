@@ -265,7 +265,12 @@ def create_text_image(text, size, font_path="Arial", fontsize=50):
     line = ""
     for word in words:
         test_line = line + " " + word if line != "" else word
-        w, h = draw.textsize(test_line, font=font)
+        # استخدم textbbox أو getsize حسب الإصدار
+        try:
+            bbox = draw.textbbox((0, 0), test_line, font=font)
+            w = bbox[2] - bbox[0]
+        except AttributeError:
+            w, _ = font.getsize(test_line)
         if w <= size[0] - 40:
             line = test_line
         else:
@@ -275,7 +280,12 @@ def create_text_image(text, size, font_path="Arial", fontsize=50):
         lines.append(line)
     y = size[1] - (len(lines) * fontsize) - 20
     for l in lines:
-        w, h = draw.textsize(l, font=font)
+        try:
+            bbox = draw.textbbox((0, 0), l, font=font)
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+        except AttributeError:
+            w, h = font.getsize(l)
         draw.text(((size[0]-w)//2, y), l, font=font, fill="white", align="center")
         y += fontsize + 5
     return np.array(img)
