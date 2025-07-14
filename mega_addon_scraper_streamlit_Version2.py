@@ -58,22 +58,52 @@ SURA_AYAHS = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
 ]
 
-def contains_people(text: str):
+def contains_people_or_text(text: str):
     text = text.lower()
-    people_keywords = [
+
+    people_keywords = sorted([
         "person", "people", "man", "woman", "women", "men", "boy", "girl", "child", "children", "kids",
         "kid", "human", "face", "portrait", "selfie", "friends", "couple", "wedding", "bride", "groom",
         "student", "students", "body", "guy", "lady", "adult", "teen", "smile", "posing", "model",
         "family", "father", "mother", "son", "daughter", "group", "crowd", "head", "eyes", "mouth",
-        "nose", "skin", "baby", "babies", "teacher", "worker", "doctor", "nurse"
-    ]
-    arabic_people = [
-        "شخص", "اشخاص", "وجوه", "انسان", "بشر", "رجل", "امرأة", "نساء", "رجال", "طفل", "اطفال",
-        "فتاة", "شباب", "صور شخصية", "عائلة", "مجموعة", "زفاف", "عرس", "صورة", "وجه", "أم", "أب",
-        "أصدقاء", "طالب", "طلاب", "طالبة", "معلم", "معلمة", "موظف", "طبيب"
-    ]
-    all_keywords = people_keywords + arabic_people
+        "nose", "skin", "baby", "babies", "teacher", "worker", "doctor", "nurse", "people walking",
+        "man standing", "people sitting", "human being", "interview", "reporter"
+    ])
+
+    arabic_people = sorted([
+        "أب", "أصدقاء", "أم", "إنسان", "اشخاص", "بشر", "رجل", "راقص", "زفاف", "شخص", "شباب", "صورة", "صور شخصية",
+        "طالبة", "طالب", "طلاب", "طبيب", "عائلة", "عرض", "عرس", "فتاة", "قَبل", "مصافحة", "معلم", "معلمة",
+        "مجموعة", "ممثل", "موظف", "يمشي", "يجلس", "يقف", "يبتسم", "وجوه", "وجه", "نساء", "امرأة", "اطفال", "طفل"
+    ])
+
+    text_keywords = sorted([
+        "brand", "caption", "font", "infographic", "label", "letters", "logo", "lower third", "message", "note",
+        "paragraph", "poster", "presentation", "quote", "screen text", "sign", "subtitle", "tagline", "text",
+        "title", "translation", "typed", "typography", "word", "words", "write", "writing"
+    ])
+
+    arabic_text = sorted([
+        "اقتباس", "اسم", "الخط", "العلامة التجارية", "اللافتة", "المقولة", "حروف", "شرح", "شعار", "علامة",
+        "علامة تجارية", "عبارة", "عرض تقديمي", "كلمات", "كتابة", "لافتة", "مكتوب على الشاشة", "نقش", "نص", "عنوان"
+    ])
+
+    haram_keywords = sorted([
+        "alcohol", "astrology", "bacon", "bar", "beer", "bikini", "casino", "champagne", "church symbol", "cross",
+        "crucifix", "dancing", "drugs", "gambling", "hookah", "intimate", "kissing", "magic", "marijuana", "naked",
+        "nightclub", "nudity", "pork", "pub", "seductive", "sensual", "shisha", "smoking", "sorcery", "strip",
+        "tattoo", "tattoos", "vodka", "wine", "zodiac"
+    ])
+
+    arabic_haram = sorted(set([
+        "احضان", "اشباه عراة", "امراة", "بكيني", "تاروت", "خمر", "خمور", "راقصة", "رقص", "زفاف", "سحر", "سجائر",
+        "شبه عار", "شعر مكشوف", "شيشة", "صليب", "عارية", "علامة صليب", "عرق", "فتيات", "قبل", "قبلات", "قمار",
+        "كازينو", "كتابات", "لباس فاضح", "لحم خنزير", "مخدرات", "ملابس داخلية", "نادي ليلي", "نبيذ", "نرجيلة",
+        "نساء", "نساء يرقصن", "وجه مكشوف", "وشم", "رمز الصليب", "رمز مسيحي"
+    ]))
+
+    all_keywords = people_keywords + arabic_people + text_keywords + arabic_text + haram_keywords + arabic_haram
     return any(word in text for word in all_keywords)
+
 
 def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
