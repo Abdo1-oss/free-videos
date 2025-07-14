@@ -267,7 +267,7 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
             h = bbox[3] - bbox[1]
         except AttributeError:
             w, h = font.getsize(l)
-        draw.text(((size[0]-w)//2, y), l, font=font, fill="white", align="center")
+        draw.text(((size[0]-w)//2, y), l, font=font, fill="white")
         y += fontsize + 5
     return np.array(img)
 
