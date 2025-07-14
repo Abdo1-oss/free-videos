@@ -275,8 +275,11 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
 # ----------- الكود المصحح لرسم النص العربي بشكل مشكّل، متصل، RTL -----------
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
-    # ✅ لا نستخدم arabic_reshaper ولا get_display لإبقاء التشكيل كما هو وعدم ربط الحروف
     print("✅ النص كما هو (بالتشكيل وغير مشكّل الحروف):", text)
+
+    # 🚫 تحديد أقصى ارتفاع لتجنب الخطأ
+    max_height = 800
+    size = (size[0], min(size[1], max_height))
 
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -284,6 +287,9 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
         font = ImageFont.truetype(font_path, fontsize)
     except:
         font = ImageFont.load_default()
+
+    # متابعة رسم النص (أكملها حسب كودك الأصلي)...
+
 
     # تقسيم النص لعدة أسطر من اليسار لليمين بدون تشكيل أو دمج
     lines = []
