@@ -56,19 +56,23 @@ SURA_AYAHS = [
     7, 286, 200, 176, 120, 165, 206, 75, 129, 109, 123, 111, 43, 52, 99, 128, 111, 110, 98, 135, 112, 78, 118, 64, 77, 227, 93, 88, 69, 60, 34, 30, 73, 54, 45, 83, 182, 88, 75, 85, 54, 53, 89, 59, 37, 35, 38, 29, 18, 45, 60, 49, 62, 55, 78, 96, 29, 22, 24, 13, 14, 11, 11, 18, 12, 12, 30, 52, 52, 44, 28, 28, 20, 56, 40, 31, 50, 40, 46, 42, 29, 19, 36, 25, 22, 17, 19, 26, 30, 20, 15, 21, 11, 8, 8, 19, 5, 8, 8, 11, 11, 8, 3, 9, 5, 4, 7, 3, 6, 3, 5, 4, 5, 6
 ]
 
-def is_haram_video(video_text):
+# --- دالة فلترة قوية لأي محتوى فيه أشخاص (عربي + إنجليزي) ---
+def contains_people(text: str):
+    text = text.lower()
     people_keywords = [
-        "person","people","man","woman","women","men","boy","girl","child","children","kids","kid",
-        "human","face","portrait","selfie","friends","couple","wedding","bride","groom","student","students",
-        "woman face","body","guy","lady","adult","teen","smile","posing","model","family","father","mother","son","daughter",
-        "group","crowd","head","eyes","mouth","nose","skin","baby","babies"
+        "person", "people", "man", "woman", "women", "men", "boy", "girl", "child", "children", "kids",
+        "kid", "human", "face", "portrait", "selfie", "friends", "couple", "wedding", "bride", "groom",
+        "student", "students", "body", "guy", "lady", "adult", "teen", "smile", "posing", "model",
+        "family", "father", "mother", "son", "daughter", "group", "crowd", "head", "eyes", "mouth",
+        "nose", "skin", "baby", "babies", "teacher", "worker", "doctor", "nurse"
     ]
-    haram_keywords = [
-        "cross","church","pork","alcohol","beer","wine","christ","statue","idol","jesus","dance","music","singer","band",
-        "gambling","casino","nude","naked","bikini","swimsuit","sexy","kiss","romance","dating","halloween","zombie","devil","witch"
+    arabic_people = [
+        "شخص", "اشخاص", "وجوه", "انسان", "بشر", "رجل", "امرأة", "نساء", "رجال", "طفل", "اطفال",
+        "فتاة", "شباب", "صور شخصية", "عائلة", "مجموعة", "زفاف", "عرس", "صورة", "وجه", "أم", "أب",
+        "أصدقاء", "طالب", "طلاب", "طالبة", "معلم", "معلمة", "موظف", "طبيب"
     ]
-    video_text = video_text.lower()
-    return any(word in video_text for word in people_keywords + haram_keywords)
+    all_keywords = people_keywords + arabic_people
+    return any(word in text for word in all_keywords)
 
 def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
@@ -88,7 +92,7 @@ def get_ayah_text_and_translation(sura_idx, ayah_num):
 
 def get_keywords_from_cohere(arabic, english):
     co = cohere.Client(COHERE_API_KEY)
-    prompt = f"""Given this Quran verse and its English translation, suggest 7-10 English visual keywords suitable for searching background videos (avoid humans, faces, music, forbidden things).
+    prompt = f"""Given this Quran verse and its English translation, suggest 7-10 English visual keywords suitable for searching background videos (avoid humans, faces, people, and forbidden things).
 Verse: {arabic}
 Translation: {english}
 List only the keywords, comma-separated:"""
@@ -102,6 +106,7 @@ List only the keywords, comma-separated:"""
     kws = response.generations[0].text.strip()
     return [k.strip() for k in kws.replace('\n','').split(',') if k.strip()]
 
+# --- دوال جلب الخلفيات مع فلترة قوية لأي فيديو فيه أشخاص ---
 def get_pexels_shorts_videos(api_key, needed_duration, keywords):
     headers = {"Authorization": api_key}
     shorts = []
@@ -113,15 +118,15 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
         except Exception:
             continue
         for v in videos:
-            desc = (v.get("description") or "").lower()
-            user_name = (v.get("user", {}).get("name") or "").lower()
-            tags = [t.lower() for t in v.get("tags",[])]
-            title = (v.get("title") or "").lower()
+            desc = (v.get("description") or "")
+            user_name = (v.get("user", {}).get("name") or "")
+            tags = [t for t in v.get("tags",[])]
+            title = (v.get("title") or "")
             text = " ".join(tags) + " " + desc + " " + user_name + " " + title
-            if is_haram_video(text):
+            if contains_people(text):
                 continue
             for file in v["video_files"]:
-                if file["quality"]=="hd" and is_shorts(file["width"], file["height"], v["duration"]):
+                if file["quality"] == "hd" and is_shorts(file["width"], file["height"], v["duration"]):
                     shorts.append({"link": file["link"], "duration": v["duration"], "title": v.get("description",'')})
                     break
     return shorts
@@ -142,11 +147,11 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
         except Exception:
             continue
         for v in videos:
-            tags = (v.get("tags") or "").lower()
-            user = (v.get("user") or "").lower()
-            title = (v.get("title") or "").lower()
+            tags = (v.get("tags") or "")
+            user = (v.get("user") or "")
+            title = (v.get("title") or "")
             text = tags + " " + user + " " + title
-            if is_haram_video(text):
+            if contains_people(text):
                 continue
             for vid in v["videos"].values():
                 if is_shorts(vid["width"], vid["height"], v["duration"]):
@@ -290,6 +295,8 @@ aspect_map = {"عمودي (9:16)": (1080,1920), "أفقي (16:9)": (1920,1080), 
 
 uploaded_file = st.file_uploader("ارفع فيديو/صورة خلفية (اختياري)")
 
+st.markdown("الخلفية يمكن أن تكون أي موضوع (مدينة، هندسة، فضاء... إلخ)، الشرط الوحيد ألا تحتوي على أشخاص أو وجوه.")
+
 if st.button("إنشاء الفيديو"):
     try:
         st.info("تحليل الآيات وجلب الكلمات المفتاحية الذكية...")
@@ -400,7 +407,7 @@ if st.button("إنشاء الفيديو"):
             fontsize=50,
             color='white',
             font=font_path,
-            method='pillow',        # استخدام pillow وليس caption
+            method='pillow',        # الحل النهائي لمشكلة ImageMagick
             size=(resize[0] - 100, None),
             align='center'
         ).set_position(('center', 'bottom')).set_duration(duration).margin(bottom=70, opacity=0)
