@@ -247,8 +247,8 @@ print("✅ بعد reshaping:", reshaped_text)
 bidi_text = get_display(reshaped_text)
 print("✅ بعد bidi (النص النهائي):", bidi_text)
 
-    img = Image.new("RGBA", size, (0,0,0,0))
-    draw = ImageDraw.Draw(img)
+img = Image.new("RGBA", size, (0,0,0,0))
+draw = ImageDraw.Draw(img)
     try:
         font = ImageFont.truetype(font_path, fontsize)
     except:
