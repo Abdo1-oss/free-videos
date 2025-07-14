@@ -3,6 +3,6 @@ moviepy==1.0.3
 pydub
 requests
 ffmpeg
-opencv-python
+opencv-python-headless
 cohere
 pillow
