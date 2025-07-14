@@ -126,16 +126,22 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
         resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
         try:
             videos = resp.json().get('videos', [])
+            for v in videos:
+                thumbnail_url = v.get("image") or ""
+                if thumbnail_url and detect_faces_from_thumbnail(thumbnail_url):
+                    continue
+
+                best_file = get_best_video_file(v["video_files"])
+                if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
+                    shorts.append({
+                        "link": best_file["link"],
+                        "duration": v["duration"],
+                        "title": v.get("description", '')
+                    })
         except Exception:
             continue
-for v in videos:
-    thumbnail_url = v.get("image") or ""
-    if thumbnail_url and detect_faces_from_thumbnail(thumbnail_url):
-        continue
-            best_file = get_best_video_file(v["video_files"])
-            if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
-                shorts.append({"link": best_file["link"], "duration": v["duration"], "title": v.get("description", '')})
     return shorts
+
 
 def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
     shorts = []
@@ -150,21 +156,28 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
         resp = requests.get("https://pixabay.com/api/videos/", params=params)
         try:
             videos = resp.json().get("hits", [])
+            for v in videos:
+                thumbnail_id = v.get("picture_id")
+                if thumbnail_id:
+                    thumbnail_url = f"https://i.vimeocdn.com/video/{thumbnail_id}_640x360.jpg"
+                    if detect_faces_from_thumbnail(thumbnail_url):
+                        continue
+
+                best_file = None
+                for quality, vid in v["videos"].items():
+                    if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
+                        best_file = vid
+
+                if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
+                    shorts.append({
+                        "link": best_file["url"],
+                        "duration": v["duration"],
+                        "title": v.get("tags", '')
+                    })
         except Exception:
             continue
-for v in videos:
-    thumbnail_id = v.get("picture_id")
-    if thumbnail_id:
-        thumbnail_url = f"https://i.vimeocdn.com/video/{thumbnail_id}_640x360.jpg"
-        if detect_faces_from_thumbnail(thumbnail_url):
-            continue
-            best_file = None
-            for quality, vid in v["videos"].items():
-                if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
-                    best_file = vid
-            if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
-                shorts.append({"link": best_file["url"], "duration": v["duration"], "title": v.get("tags", '')})
     return shorts
+
 
 
 def get_mixkit_shorts_videos(needed_duration, keywords):
