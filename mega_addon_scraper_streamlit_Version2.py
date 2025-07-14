@@ -235,57 +235,58 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
 # ----------- الكود المصحح لرسم النص العربي بشكل مشكّل، متصل، RTL -----------
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
-   img_height = 200
-video_w, video_h = resize
+    size = (size[0], 200)  # 🔒 ثبّت الارتفاع إلى 200 بكسل لمنع أخطاء الفيديو
+    print("✅ النص قبل التشكيل:", text)
 
-text_img = create_text_image(chunk, (video_w, img_height), font_path, 50)
-
-print("✅ النص قبل التشكيل:", text)
     # ✅ إعادة تشكيل النص العربي ليظهر بالحروف المتصلة والتشكيل
-reshaped_text = arabic_reshaper.reshape(text)
-print("✅ بعد reshaping:", reshaped_text)
-bidi_text = get_display(reshaped_text)
-print("✅ بعد bidi (النص النهائي):", bidi_text)
+    reshaped_text = arabic_reshaper.reshape(text)
+    print("✅ بعد reshaping:", reshaped_text)
+    bidi_text = get_display(reshaped_text)
+    print("✅ بعد bidi (النص النهائي):", bidi_text)
 
-img = Image.new("RGBA", size, (0,0,0,0))
-draw = ImageDraw.Draw(img)
-try:
-    font = ImageFont.truetype(font_path, fontsize)
-except:
-       font = ImageFont.load_default()
-
-# تقسيم النص لعدة أسطر من اليمين لليسار
-lines = []
-words = bidi_text.split()
-line = ""
-for word in words:
-        test_line = word if not line else word + " " + line
-try:
-    bbox = draw.textbbox((0, 0), test_line, font=font)
-w = bbox[2] - bbox[0]
-except AttributeError:
- w, _ = font.getsize(test_line)
-    if w <= size[0] - 40:
-        line = test_line
-    else:
-        lines.append(line)
-        line = word
-    if line:
-                lines.append(line)
-
-total_text_height = len(lines) * fontsize + (len(lines)-1)*5
-y = (size[1] - total_text_height) // 2
-    for l in reversed(lines):
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
     try:
-        bbox = draw.textbbox((0, 0), l, font=font)
-w = bbox[2] - bbox[0]
-except AttributeError:
-w, _ = font.getsize(l)
-x = (size[0] - w) // 2
-draw.text((x, y), l, font=font, fill="white")
-y += fontsize + 5
+        font = ImageFont.truetype(font_path, fontsize)
+    except:
+        font = ImageFont.load_default()
 
-return np.array(img)
+    # تقسيم النص لعدة أسطر من اليمين لليسار
+    lines = []
+    words = bidi_text.split()
+    line = ""
+    for word in words:
+        test_line = word if not line else word + " " + line
+        try:
+            bbox = draw.textbbox((0, 0), test_line, font=font)
+            w = bbox[2] - bbox[0]
+        except AttributeError:
+            w, _ = font.getsize(test_line)
+
+        if w <= size[0] - 40:
+            line = test_line
+        else:
+            lines.append(line)
+            line = word
+
+    if line:
+        lines.append(line)
+
+    total_text_height = len(lines) * fontsize + (len(lines) - 1) * 5
+    y = (size[1] - total_text_height) // 2
+    for l in reversed(lines):
+        try:
+            bbox = draw.textbbox((0, 0), l, font=font)
+            w = bbox[2] - bbox[0]
+        except AttributeError:
+            w, _ = font.getsize(l)
+
+        x = (size[0] - w) // 2
+        draw.text((x, y), l, font=font, fill="white")
+        y += fontsize + 5
+
+    return np.array(img)
+
 
 def split_text_for_timings(full_text, words_per_clip=4):
     words = full_text.split()
