@@ -240,7 +240,7 @@ video_w, video_h = resize
 
 text_img = create_text_image(chunk, (video_w, img_height), font_path, 50)
 
-    print("✅ النص قبل التشكيل:", text)
+print("✅ النص قبل التشكيل:", text)
     # ✅ إعادة تشكيل النص العربي ليظهر بالحروف المتصلة والتشكيل
     reshaped_text = arabic_reshaper.reshape(text)
     print("✅ بعد reshaping:", reshaped_text)
