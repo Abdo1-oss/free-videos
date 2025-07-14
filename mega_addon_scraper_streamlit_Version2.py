@@ -130,14 +130,14 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
         for v in videos:
             desc = (v.get("description") or "")
             user_name = (v.get("user", {}).get("name") or "")
-            tags = [t for t in v.get("tags",[])]
+            tags = [t for t in v.get("tags", [])]
             title = (v.get("title") or "")
             text = " ".join(tags) + " " + desc + " " + user_name + " " + title
-            if contains_people(text):
+            if contains_people_or_text(text):
                 continue
             best_file = get_best_video_file(v["video_files"])
             if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
-                shorts.append({"link": best_file["link"], "duration": v["duration"], "title": v.get("description",'')})
+                shorts.append({"link": best_file["link"], "duration": v["duration"], "title": v.get("description", '')})
     return shorts
 
 def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
@@ -160,15 +160,16 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
             user = (v.get("user") or "")
             title = (v.get("title") or "")
             text = tags + " " + user + " " + title
-            if contains_people(text):
+            if contains_people_or_text(text):
                 continue
             best_file = None
             for quality, vid in v["videos"].items():
                 if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
                     best_file = vid
             if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
-                shorts.append({"link": best_file["url"], "duration": v["duration"], "title": v.get("tags",'')})
+                shorts.append({"link": best_file["url"], "duration": v["duration"], "title": v.get("tags", '')})
     return shorts
+
 
 def get_mixkit_shorts_videos(needed_duration, keywords):
     mixkit_links = [
