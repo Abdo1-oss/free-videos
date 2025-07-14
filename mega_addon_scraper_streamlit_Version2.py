@@ -249,43 +249,43 @@ print("✅ بعد bidi (النص النهائي):", bidi_text)
 
 img = Image.new("RGBA", size, (0,0,0,0))
 draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype(font_path, fontsize)
-    except:
-        font = ImageFont.load_default()
+try:
+    font = ImageFont.truetype(font_path, fontsize)
+except:
+       font = ImageFont.load_default()
 
-    # تقسيم النص لعدة أسطر من اليمين لليسار
-    lines = []
-    words = bidi_text.split()
-    line = ""
-    for word in words:
-        test_line = word if not line else word + " " + line
-        try:
-            bbox = draw.textbbox((0, 0), test_line, font=font)
-            w = bbox[2] - bbox[0]
-        except AttributeError:
-            w, _ = font.getsize(test_line)
-        if w <= size[0] - 40:
-            line = test_line
-        else:
-            lines.append(line)
-            line = word
-    if line:
-        lines.append(line)
+# تقسيم النص لعدة أسطر من اليمين لليسار
+lines = []
+words = bidi_text.split()
+line = ""
+for word in words:
+test_line = word if not line else word + " " + line
+try:
+    bbox = draw.textbbox((0, 0), test_line, font=font)
+w = bbox[2] - bbox[0]
+except AttributeError:
+ w, _ = font.getsize(test_line)
+if w <= size[0] - 40:
+line = test_line
+else:
+    lines.append(line)
+    line = word
+if line:
+lines.append(line)
 
-    total_text_height = len(lines) * fontsize + (len(lines)-1)*5
-    y = (size[1] - total_text_height) // 2
-    for l in reversed(lines):
-        try:
-            bbox = draw.textbbox((0, 0), l, font=font)
-            w = bbox[2] - bbox[0]
-        except AttributeError:
-            w, _ = font.getsize(l)
-        x = (size[0] - w) // 2
-        draw.text((x, y), l, font=font, fill="white")
-        y += fontsize + 5
+total_text_height = len(lines) * fontsize + (len(lines)-1)*5
+y = (size[1] - total_text_height) // 2
+for l in reversed(lines):
+try:
+    bbox = draw.textbbox((0, 0), l, font=font)
+w = bbox[2] - bbox[0]
+except AttributeError:
+w, _ = font.getsize(l)
+x = (size[0] - w) // 2
+draw.text((x, y), l, font=font, fill="white")
+y += fontsize + 5
 
-    return np.array(img)
+return np.array(img)
 
 def split_text_for_timings(full_text, words_per_clip=4):
     words = full_text.split()
