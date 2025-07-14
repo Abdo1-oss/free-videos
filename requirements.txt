@@ -11,3 +11,4 @@ python-bidi
 numpy
 arabic_reshaper
 python-bidi
+opencv-python
