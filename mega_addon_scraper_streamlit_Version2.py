@@ -10,6 +10,7 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 import numpy as np
 
+# إعدادات السور والقراء
 QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "العفاسي", "id": "Alafasy_64kbps"}]
 SURA_NAMES = ["الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة"]
 SURA_AYAHS = [7, 286, 200, 176, 120]
@@ -19,7 +20,7 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
     headers = {"Authorization": PEXELS_API_KEY}
     all_links = []
     for query in random.sample(keywords, len(keywords)):
-        params = {"query": query, "per_page": 15}
+        params = {"query": query, "per_page": 20}
         resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
         if not resp.ok:
             continue
@@ -29,7 +30,7 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
                     link = vf.get("link")
                     if link and link not in all_links:
                         all_links.append(link)
-        if len(all_links) > 10:
+        if len(all_links) > 20:
             break
     video_clips = []
     total_dur = 0
@@ -56,8 +57,9 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
             st.warning(str(e))
             continue
     if total_dur < needed_duration:
-        st.error("مدة الفيديوهات أقل من مدة الصوت. أعد المحاولة بكلمات مفتاحية أخرى أو آيات أقل.")
+        st.error("مدة الفيديوهات أقل من مدة الصوت. أضف آيات أقل أو استخدم كلمات مفتاحية أكثر.")
         return []
+    # إذا جمعت أكثر من المطلوب، قص الفيديو النهائي ليطابق مدة الصوت بالضبط
     return video_clips
 
 def get_ayah_text(sura_idx, ayah_num):
@@ -77,9 +79,9 @@ def get_audio_segment(qari_id, sura_idx, ayah):
     return segment
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
-    # تأكد أن الخط موجود في المجلد!
+    # تأكد أن الخط موجود في مجلد المشروع، وإلا استخدم الخط البديل
     if not os.path.exists(font_path):
-        font_path = "NotoNaskhArabic-Regular.ttf"  # خط بديل لو لم يوجد Amiri
+        font_path = "NotoNaskhArabic-Regular.ttf"
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
     img = Image.new("RGBA", size, (0,0,0,0))
@@ -87,8 +89,9 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
     try:
         font = ImageFont.truetype(font_path, fontsize)
     except Exception as e:
-        st.warning(f"خطأ في تحميل الخط العربي: {e}")
+        st.warning(f"خطأ في تحميل الخط: {e}")
         font = ImageFont.load_default()
+    # استخدم textbbox إذا متاح، وإلا استخدم getsize
     try:
         bbox = draw.textbbox((0, 0), bidi_text, font=font)
         w = bbox[2] - bbox[0]
@@ -99,9 +102,8 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
     return np.array(img)
 
 def split_text_chunks(text, chunk_size=3):
-    """يقسم النص إلى قوائم من كل chunk_size كلمات"""
+    # تقسيم النص كل ثلاث كلمات ولا يتم تقطيع الحروف
     words = text.split()
-    # إعادة الربط الصحيح حتى الحروف لا تظهر متقطعة
     chunks = []
     i = 0
     while i < len(words):
@@ -143,7 +145,10 @@ if st.button("إنشاء الفيديو"):
     video_clips = get_pexels_videos(keywords_default, needed_duration=total_duration)
     if not video_clips:
         st.stop()
-    concat_video = concatenate_videoclips(video_clips).subclip(0, total_duration)
+    concat_video = concatenate_videoclips(video_clips)
+    # إذا كانت مدة الفيديو أكبر من الصوت، قص الفيديو ليطابق مدة الصوت
+    if concat_video.duration > total_duration:
+        concat_video = concat_video.subclip(0, total_duration)
 
     st.info("جاري تجهيز النص...")
     text_clips = []
@@ -159,11 +164,10 @@ if st.button("إنشاء الفيديو"):
 
     final = CompositeVideoClip([concat_video] + text_clips).set_audio(audio_clip).set_duration(total_duration)
 
-    output_path = "quran_shorts_pexels_multi_chunks_fixed.mp4"
+    output_path = "quran_shorts_pexels_final.mp4"
     st.info("جاري تصدير الفيديو...")
     final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
     st.success("تم الإنشاء!")
     st.video(output_path)
     with open(output_path, "rb") as f:
-        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels_multi_chunks_fixed.mp4", mime="video/mp4")
-        
+        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels_final.mp4", mime="video/mp4")
