@@ -4,7 +4,7 @@ import tempfile
 import os
 import random
 from pydub import AudioSegment
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ImageClip, concatenate_videoclips, vfx
+from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ImageClip
 from PIL import Image, ImageDraw, ImageFont
 import arabic_reshaper
 from bidi.algorithm import get_display
@@ -84,7 +84,11 @@ if st.button("إنشاء الفيديو"):
             if chunk:
                 vid_file.write(chunk)
         vid_file.flush()
-        video_clip = VideoFileClip(vid_file.name).subclip(0, min(duration, VideoFileClip(vid_file.name).duration)).resize((1080,1920))
+        if os.path.getsize(vid_file.name) < 10000:
+            st.error("فشل تحميل الفيديو أو الملف غير صالح")
+            st.stop()
+        clip = VideoFileClip(vid_file.name)
+        video_clip = clip.subclip(0, min(duration, clip.duration)).resize((1080,1920))
 
     st.info("جاري تجهيز النص...")
     ayat_text = " ".join(ayat_texts)
