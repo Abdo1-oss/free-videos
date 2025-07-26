@@ -13,3 +13,4 @@ arabic_reshaper
 python-bidi
 opencv-python
 cairosvg
+matplotlib
