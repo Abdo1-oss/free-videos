@@ -10,7 +10,6 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 import numpy as np
 
-# إعدادات القارئ والسورة
 QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "العفاسي", "id": "Alafasy_64kbps"}]
 SURA_NAMES = ["الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة"]
 SURA_AYAHS = [7, 286, 200, 176, 120]
@@ -25,7 +24,6 @@ def get_pexels_video(keywords):
     videos = []
     if resp.ok:
         for v in resp.json().get("videos", []):
-            # فلترة الفيديوهات العمودية والآمنة فقط
             for vf in v.get("video_files", []):
                 if vf.get("width", 0) < vf.get("height", 1) and vf.get("height", 1) >= 720:
                     videos.append(vf.get("link"))
@@ -34,11 +32,9 @@ def get_pexels_video(keywords):
     return None
 
 def get_best_video(keywords):
-    # حاول الحصول على فيديو من بيكسيلز أولاً
     link = get_pexels_video(keywords)
     if link:
         return link
-    # fallback: فيديو Mixkit
     videos = [
         "https://assets.mixkit.co/videos/download/mixkit-clouds-in-the-sky-123.mp4",
         "https://assets.mixkit.co/videos/download/mixkit-mountain-landscape-1233.mp4",
@@ -60,7 +56,13 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
         font = ImageFont.truetype(font_path, fontsize)
     except:
         font = ImageFont.load_default()
-    w, h = draw.textsize(bidi_text, font=font)
+    # استخدم textbbox إذا متاحة، وإلا getsize
+    try:
+        bbox = draw.textbbox((0, 0), bidi_text, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+    except AttributeError:
+        w, h = font.getsize(bidi_text)
     draw.text(((size[0]-w)//2, (size[1]-h)//2), bidi_text, font=font, fill="white")
     return np.array(img)
 
@@ -100,7 +102,7 @@ if st.button("إنشاء الفيديو"):
     audio_clip = AudioFileClip(audio_path)
     duration = audio_clip.duration
 
-    st.info("جاري تحميل فيديو الخلفية من بيكسيلز...")
+    st.info("جاري تحميل فيديو الخلفية...")
     video_url = get_best_video(keywords_default)
     if not video_url:
         st.error("تعذر الحصول على فيديو مناسب من بيكسيلز أو Mixkit")
