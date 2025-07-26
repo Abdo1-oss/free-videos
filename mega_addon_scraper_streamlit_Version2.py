@@ -10,7 +10,6 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 import numpy as np
 
-# إعدادات السور والقراء
 QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "العفاسي", "id": "Alafasy_64kbps"}]
 SURA_NAMES = ["الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة"]
 SURA_AYAHS = [7, 286, 200, 176, 120]
@@ -81,17 +80,12 @@ def get_audio_segment(qari_id, sura_idx, ayah):
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
     # تأكد أن الخط موجود في مجلد المشروع، وإلا استخدم الخط البديل
     if not os.path.exists(font_path):
-        font_path = "NotoNaskhArabic-Regular.ttf"
+        raise FileNotFoundError(f"الخط {font_path} غير موجود في مجلد المشروع!")
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
     img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype(font_path, fontsize)
-    except Exception as e:
-        st.warning(f"خطأ في تحميل الخط: {e}")
-        font = ImageFont.load_default()
-    # استخدم textbbox إذا متاح، وإلا استخدم getsize
+    font = ImageFont.truetype(font_path, fontsize)
     try:
         bbox = draw.textbbox((0, 0), bidi_text, font=font)
         w = bbox[2] - bbox[0]
