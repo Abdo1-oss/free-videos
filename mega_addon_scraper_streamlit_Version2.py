@@ -4,7 +4,7 @@ import tempfile
 import os
 import random
 from pydub import AudioSegment
-from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ImageClip
+from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ImageClip, concatenate_videoclips
 from PIL import Image, ImageDraw, ImageFont
 import arabic_reshaper
 from bidi.algorithm import get_display
@@ -13,52 +13,66 @@ import numpy as np
 QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "العفاسي", "id": "Alafasy_64kbps"}]
 SURA_NAMES = ["الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة"]
 SURA_AYAHS = [7, 286, 200, 176, 120]
-
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 
-def get_pexels_video(keywords, min_height=720, max_trials=10):
+def get_pexels_videos(keywords, min_height=720, needed_duration=30):
     headers = {"Authorization": PEXELS_API_KEY}
-    query = random.choice(keywords)
-    params = {"query": query, "per_page": 20}
-    resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
-    videos = []
-    if resp.ok:
+    all_links = []
+    for query in random.sample(keywords, len(keywords)):
+        params = {"query": query, "per_page": 15}
+        resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
+        if not resp.ok:
+            continue
         for v in resp.json().get("videos", []):
             for vf in v.get("video_files", []):
-                # نختار فيديوهات عمودية فقط
                 if vf.get("width", 0) < vf.get("height", 1) and vf.get("height", 1) >= min_height:
-                    videos.append(vf.get("link"))
-    # جرب حتى 10 روابط حتى تجد فيديو صالح
-    for trial in range(min(max_trials, len(videos))):
-        video_url = videos[trial]
-        st.info(f"جاري تجربة فيديو بيكسيلز رقم {trial+1}: {video_url}")
-        r = requests.get(video_url, stream=True)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as vid_file:
-            for chunk in r.iter_content(chunk_size=1024*1024):
-                if chunk:
-                    vid_file.write(chunk)
-            vid_file.flush()
-            file_size = os.path.getsize(vid_file.name)
-            st.info(f"حجم الملف المحمل: {file_size} بايت")
-            if file_size < 10000:
-                st.warning(f"هذا الفيديو غير صالح أو محمي (الحجم صغير جدًا). جرب التالي...")
-                continue
-            try:
+                    link = vf.get("link")
+                    if link and link not in all_links:
+                        all_links.append(link)
+        if len(all_links) > 10:
+            break
+    video_clips = []
+    total_dur = 0
+    for video_url in all_links:
+        st.info(f"تحميل فيديو: {video_url}")
+        try:
+            r = requests.get(video_url, stream=True)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as vid_file:
+                for chunk in r.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        vid_file.write(chunk)
+                vid_file.flush()
+                file_size = os.path.getsize(vid_file.name)
+                if file_size < 10000:
+                    continue
                 clip = VideoFileClip(vid_file.name)
-                # إذا نجح فتح الفيديو نعيد الرابط والملف
-                return clip, vid_file.name
-            except Exception as e:
-                st.warning(f"فشل فتح الفيديو بواسطة MoviePy: {e}. جرب التالي...")
-                continue
-    st.error("لم يتم العثور على فيديو بيكسيلز صالح بعد عدة محاولات.")
-    return None, None
+                clip = clip.resize((1080,1920))
+                video_clips.append(clip)
+                total_dur += clip.duration
+                if total_dur >= needed_duration:
+                    break
+        except Exception as e:
+            st.warning(str(e))
+            continue
+    return video_clips
 
 def get_ayah_text(sura_idx, ayah_num):
     url = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/ar"
     r = requests.get(url)
     return r.json()["data"]["text"] if r.ok else ""
 
-def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
+def get_audio_segment(qari_id, sura_idx, ayah):
+    mp3_url = f"https://everyayah.com/data/{qari_id}/{sura_idx:03d}{ayah:03d}.mp3"
+    r = requests.get(mp3_url)
+    if r.status_code != 200:
+        return AudioSegment.silent(duration=2000)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_ayah_file:
+        temp_ayah_file.write(r.content)
+        temp_ayah_file.flush()
+        segment = AudioSegment.from_mp3(temp_ayah_file.name)
+    return segment
+
+def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
     img = Image.new("RGBA", size, (0,0,0,0))
@@ -76,7 +90,12 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
     draw.text(((size[0]-w)//2, (size[1]-h)//2), bidi_text, font=font, fill="white")
     return np.array(img)
 
-st.title("فيديو قرآن شورتس من بيكسيلز فقط")
+def split_text_chunks(text, chunk_size=3):
+    """يقسم النص إلى قوائم من كل chunk_size كلمات"""
+    words = text.split()
+    return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
+
+st.title("فيديو قرآن شورتس من عدة فيديوهات بيكسيلز مع تقسيم النص")
 
 selected_qari = st.selectbox("اختر القارئ:", [q["name"] for q in QURAA])
 qari_id = [q["id"] for q in QURAA][[q["name"] for q in QURAA].index(selected_qari)]
@@ -90,46 +109,46 @@ keywords_default = ["nature", "sky", "mountain", "river", "forest", "sunrise", "
 
 if st.button("إنشاء الفيديو"):
     st.info("جاري تجهيز الصوت...")
-    merged = None
+    audio_segments = []
     ayat_texts = []
+    ayah_durations = []
     for ayah in range(int(from_ayah), int(to_ayah)+1):
-        mp3_url = f"https://everyayah.com/data/{qari_id}/{sura_idx:03d}{ayah:03d}.mp3"
-        r = requests.get(mp3_url)
+        segment = get_audio_segment(qari_id, sura_idx, ayah)
+        audio_segments.append(segment)
         ayat_texts.append(get_ayah_text(sura_idx, ayah))
-        if r.status_code != 200:
-            segment = AudioSegment.silent(duration=2000)
-        else:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_ayah_file:
-                temp_ayah_file.write(r.content)
-                temp_ayah_file.flush()
-                segment = AudioSegment.from_mp3(temp_ayah_file.name)
-        merged = segment if merged is None else merged + segment
-
+        ayah_durations.append(len(segment)/1000)
+    merged = sum(audio_segments[1:], audio_segments[0])
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as merged_file:
         merged.export(merged_file.name, format="mp3")
         audio_path = merged_file.name
-
     audio_clip = AudioFileClip(audio_path)
-    duration = audio_clip.duration
+    total_duration = audio_clip.duration
 
-    st.info("جاري تحميل فيديو الخلفية من بيكسيلز...")
-    clip, fname = get_pexels_video(keywords_default)
-    if not clip:
-        st.error("تعذر العثور على فيديو بيكسيلز مناسب بعد عدة محاولات.")
+    st.info("جاري تحميل وتجميع فيديوهات الخلفية من بيكسيلز...")
+    video_clips = get_pexels_videos(keywords_default, needed_duration=total_duration)
+    if not video_clips:
+        st.error("تعذر العثور على فيديوهات بيكسيلز مناسبة.")
         st.stop()
-    video_clip = clip.subclip(0, min(duration, clip.duration)).resize((1080,1920))
+    concat_video = concatenate_videoclips(video_clips).subclip(0, total_duration)
 
     st.info("جاري تجهيز النص...")
-    ayat_text = " ".join(ayat_texts)
-    text_img = create_text_image(ayat_text, (1080, 200), "Amiri-Regular.ttf", 60)
-    text_clip = ImageClip(text_img, duration=duration).set_position(("center","bottom"))
+    text_clips = []
+    start = 0
+    for text, ayah_dur in zip(ayat_texts, ayah_durations):
+        chunks = split_text_chunks(text, chunk_size=3)
+        chunk_dur = ayah_dur / max(1, len(chunks))
+        for chunk in chunks:
+            text_img = create_text_image(chunk, (1080, 200), "Amiri-Regular.ttf", 60)
+            text_clip = ImageClip(text_img, duration=chunk_dur).set_start(start).set_position(("center","bottom"))
+            text_clips.append(text_clip)
+            start += chunk_dur
 
-    final = CompositeVideoClip([video_clip, text_clip.set_start(0)]).set_audio(audio_clip).set_duration(duration)
+    final = CompositeVideoClip([concat_video] + text_clips).set_audio(audio_clip).set_duration(total_duration)
 
-    output_path = "quran_shorts_pexels.mp4"
+    output_path = "quran_shorts_pexels_multi_chunks.mp4"
     st.info("جاري تصدير الفيديو...")
     final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
     st.success("تم الإنشاء!")
     st.video(output_path)
     with open(output_path, "rb") as f:
-        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels.mp4", mime="video/mp4")
+        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels_multi_chunks.mp4", mime="video/mp4")
