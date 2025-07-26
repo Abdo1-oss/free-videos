@@ -56,7 +56,7 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
             st.warning(str(e))
             continue
     if total_dur < needed_duration:
-        st.error("مدة الفيديوهات أقل من مدة الصوت. أضف آيات أقل أو استخدم كلمات مفتاحية أكثر.")
+        st.error("مدة الفيديوهات أقل من مدة الصوت. أضف آيات أقل أو استخدم كلمات مفتاحية أكثر ولا تكرر الفيديو.")
         return []
     # إذا جمعت أكثر من المطلوب، قص الفيديو النهائي ليطابق مدة الصوت بالضبط
     return video_clips
@@ -78,14 +78,19 @@ def get_audio_segment(qari_id, sura_idx, ayah):
     return segment
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
-    # تأكد أن الخط موجود في مجلد المشروع، وإلا استخدم الخط البديل
+    # تحقق من وجود الخط العربي وأوقف البرنامج إذا لم يوجد
     if not os.path.exists(font_path):
-        raise FileNotFoundError(f"الخط {font_path} غير موجود في مجلد المشروع!")
+        st.error(f"الخط العربي '{font_path}' غير موجود في مجلد المشروع! أضفه أو عدل المسار.")
+        st.stop()
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
     img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(font_path, fontsize)
+    try:
+        font = ImageFont.truetype(font_path, fontsize)
+    except Exception as e:
+        st.error(f"خطأ في تحميل الخط العربي: {e}")
+        st.stop()
     try:
         bbox = draw.textbbox((0, 0), bidi_text, font=font)
         w = bbox[2] - bbox[0]
@@ -96,7 +101,6 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
     return np.array(img)
 
 def split_text_chunks(text, chunk_size=3):
-    # تقسيم النص كل ثلاث كلمات ولا يتم تقطيع الحروف
     words = text.split()
     chunks = []
     i = 0
