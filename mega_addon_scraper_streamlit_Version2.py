@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import arabic_reshaper
 from bidi.algorithm import get_display
 import numpy as np
+import matplotlib.font_manager as fm
 
 QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "العفاسي", "id": "Alafasy_64kbps"}]
 SURA_NAMES = ["الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة"]
@@ -76,15 +77,12 @@ def get_audio_segment(qari_id, sura_idx, ayah):
         segment = AudioSegment.from_mp3(temp_ayah_file.name)
     return segment
 
-def create_text_image_matplotlib(text, size=(1080, 200), fontsize=60, fontname='Noto Naskh Arabic'):
-    """
-    ترسم النص العربي بشكل مشكّل ومرتب باستخدام matplotlib
-    جرب تغيير fontname إلى 'Amiri' أو 'Lateef' أو أي خط عربي مناسب ومثبت بالنظام إذا واجهت مشاكل في التشكيل أو كلمة الله.
-    """
+def create_text_image_noto_naskh(text, size=(1080, 200), fontsize=60, font_path="NotoNaskhArabic-Regular.ttf"):
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
     fig, ax = plt.subplots(figsize=(size[0]/100, size[1]/100), dpi=100)
-    ax.text(0.5, 0.5, bidi_text, fontsize=fontsize, fontname=fontname,
+    prop = fm.FontProperties(fname=font_path)
+    ax.text(0.5, 0.5, bidi_text, fontsize=fontsize, fontproperties=prop,
             color="white", ha='center', va='center')
     ax.set_axis_off()
     fig.patch.set_alpha(0)
@@ -150,7 +148,8 @@ if st.button("إنشاء الفيديو"):
         chunks = split_text_chunks(text, chunk_size=3)
         chunk_dur = ayah_dur / max(1, len(chunks))
         for chunk in chunks:
-            text_img = create_text_image_matplotlib(chunk, size=(1080, 200), fontsize=60, fontname='Noto Naskh Arabic')
+            # استخدم خط Noto Naskh Arabic بالتشكيل وبكل شيء
+            text_img = create_text_image_noto_naskh(chunk, size=(1080, 200), fontsize=60, font_path="NotoNaskhArabic-Regular.ttf")
             text_clip = ImageClip(text_img, duration=chunk_dur).set_start(start).set_position(("center","bottom"))
             text_clips.append(text_clip)
             start += chunk_dur
