@@ -15,8 +15,30 @@ QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "ا�
 SURA_NAMES = ["الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة"]
 SURA_AYAHS = [7, 286, 200, 176, 120]
 
-def get_best_video():
-    # فيديو خلفية جاهز مضمون بدون أشخاص/محرمات (Mixkit)
+PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
+
+def get_pexels_video(keywords):
+    headers = {"Authorization": PEXELS_API_KEY}
+    query = random.choice(keywords)
+    params = {"query": query, "per_page": 15}
+    resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
+    videos = []
+    if resp.ok:
+        for v in resp.json().get("videos", []):
+            # فلترة الفيديوهات العمودية والآمنة فقط
+            for vf in v.get("video_files", []):
+                if vf.get("width", 0) < vf.get("height", 1) and vf.get("height", 1) >= 720:
+                    videos.append(vf.get("link"))
+    if videos:
+        return random.choice(videos)
+    return None
+
+def get_best_video(keywords):
+    # حاول الحصول على فيديو من بيكسيلز أولاً
+    link = get_pexels_video(keywords)
+    if link:
+        return link
+    # fallback: فيديو Mixkit
     videos = [
         "https://assets.mixkit.co/videos/download/mixkit-clouds-in-the-sky-123.mp4",
         "https://assets.mixkit.co/videos/download/mixkit-mountain-landscape-1233.mp4",
@@ -52,6 +74,8 @@ ayah_count = SURA_AYAHS[sura_idx-1]
 from_ayah = st.number_input("من الآية رقم:", 1, ayah_count, 1)
 to_ayah = st.number_input("إلى الآية رقم:", from_ayah, ayah_count, from_ayah)
 
+keywords_default = ["nature", "sky", "mountain", "river", "forest", "sunrise", "space", "stars", "moon", "clouds"]
+
 if st.button("إنشاء الفيديو"):
     st.info("جاري تجهيز الصوت...")
     merged = None
@@ -76,8 +100,11 @@ if st.button("إنشاء الفيديو"):
     audio_clip = AudioFileClip(audio_path)
     duration = audio_clip.duration
 
-    st.info("جاري تحميل فيديو الخلفية...")
-    video_url = get_best_video()
+    st.info("جاري تحميل فيديو الخلفية من بيكسيلز...")
+    video_url = get_best_video(keywords_default)
+    if not video_url:
+        st.error("تعذر الحصول على فيديو مناسب من بيكسيلز أو Mixkit")
+        st.stop()
     r = requests.get(video_url, stream=True)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as vid_file:
         for chunk in r.iter_content(chunk_size=1024*1024):
