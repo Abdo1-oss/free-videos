@@ -5,7 +5,8 @@ import os
 import random
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ImageClip, concatenate_videoclips
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+import matplotlib.pyplot as plt
 import arabic_reshaper
 from bidi.algorithm import get_display
 import numpy as np
@@ -34,7 +35,6 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
     video_clips = []
     total_dur = 0
     i = 0
-    # اجمع الفيديوهات حتى تتجاوز مدة الصوت المطلوبة
     while total_dur < needed_duration and i < len(all_links):
         video_url = all_links[i]
         i += 1
@@ -58,7 +58,6 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
     if total_dur < needed_duration:
         st.error("مدة الفيديوهات أقل من مدة الصوت. أضف آيات أقل أو استخدم كلمات مفتاحية أكثر ولا تكرر الفيديو.")
         return []
-    # إذا جمعت أكثر من المطلوب، قص الفيديو النهائي ليطابق مدة الصوت بالضبط
     return video_clips
 
 def get_ayah_text(sura_idx, ayah_num):
@@ -77,22 +76,21 @@ def get_audio_segment(qari_id, sura_idx, ayah):
         segment = AudioSegment.from_mp3(temp_ayah_file.name)
     return segment
 
-def create_text_image(text, size=(1080, 200), font_path="Amiri-Regular.ttf", fontsize=60):
-    if not os.path.exists(font_path):
-        raise FileNotFoundError(f"Font file '{font_path}' not found in the current directory!")
+def create_text_image_matplotlib(text, size=(1080, 200), fontsize=60, fontname='Amiri'):
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
-    img = Image.new("RGBA", size, (0,0,0,0))
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(font_path, fontsize)
-    try:
-        bbox = draw.textbbox((0, 0), bidi_text, font=font)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-    except AttributeError:
-        w, h = font.getsize(bidi_text)
-    draw.text(((size[0]-w)//2, (size[1]-h)//2), bidi_text, font=font, fill="white")
-    return np.array(img)
+    fig, ax = plt.subplots(figsize=(size[0]/100, size[1]/100), dpi=100)
+    ax.text(0.5, 0.5, bidi_text, fontsize=fontsize, fontname=fontname,
+            color="white", ha='center', va='center')
+    ax.set_axis_off()
+    fig.patch.set_alpha(0)
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        plt.savefig(tmp.name, bbox_inches='tight', pad_inches=0, transparent=True)
+        plt.close(fig)
+        img = Image.open(tmp.name).convert("RGBA")
+        arr = np.array(img)
+    os.unlink(tmp.name)
+    return arr
 
 def split_text_chunks(text, chunk_size=3):
     words = text.split()
@@ -138,7 +136,6 @@ if st.button("إنشاء الفيديو"):
     if not video_clips:
         st.stop()
     concat_video = concatenate_videoclips(video_clips)
-    # إذا كانت مدة الفيديو أكبر من الصوت، قص الفيديو ليطابق مدة الصوت
     if concat_video.duration > total_duration:
         concat_video = concat_video.subclip(0, total_duration)
 
@@ -149,7 +146,7 @@ if st.button("إنشاء الفيديو"):
         chunks = split_text_chunks(text, chunk_size=3)
         chunk_dur = ayah_dur / max(1, len(chunks))
         for chunk in chunks:
-            text_img = create_text_image(chunk, (1080, 200), "Amiri-Regular.ttf", 60)
+            text_img = create_text_image_matplotlib(chunk, size=(1080, 200), fontsize=60, fontname='Amiri')
             text_clip = ImageClip(text_img, duration=chunk_dur).set_start(start).set_position(("center","bottom"))
             text_clips.append(text_clip)
             start += chunk_dur
