@@ -61,50 +61,32 @@ SURA_AYAHS = [
 
 def contains_people_or_text(text: str):
     text = text.lower()
-
-    people_keywords = sorted([
+    people_keywords = [
         "person", "people", "man", "woman", "women", "men", "boy", "girl", "child", "children", "kids",
         "kid", "human", "face", "portrait", "selfie", "friends", "couple", "wedding", "bride", "groom",
         "student", "students", "body", "guy", "lady", "adult", "teen", "smile", "posing", "model",
         "family", "father", "mother", "son", "daughter", "group", "crowd", "head", "eyes", "mouth",
-        "nose", "skin", "baby", "babies", "teacher", "worker", "doctor", "nurse", "people walking",
-        "man standing", "people sitting", "human being", "interview", "reporter"
-    ])
-
-    arabic_people = sorted([
-        "أب", "أصدقاء", "أم", "إنسان", "اشخاص", "بشر", "رجل", "راقص", "زفاف", "شخص", "شباب", "صورة", "صور شخصية",
-        "طالبة", "طالب", "طلاب", "طبيب", "عائلة", "عرض", "عرس", "فتاة", "قَبل", "مصافحة", "معلم", "معلمة",
-        "مجموعة", "ممثل", "موظف", "يمشي", "يجلس", "يقف", "يبتسم", "وجوه", "وجه", "نساء", "امرأة", "اطفال", "طفل"
-    ])
-
-    text_keywords = sorted([
-        "brand", "caption", "font", "infographic", "label", "letters", "logo", "lower third", "message", "note",
-        "paragraph", "poster", "presentation", "quote", "screen text", "sign", "subtitle", "tagline", "text",
-        "title", "translation", "typed", "typography", "word", "words", "write", "writing"
-    ])
-
-    arabic_text = sorted([
-        "اقتباس", "اسم", "الخط", "العلامة التجارية", "اللافتة", "المقولة", "حروف", "شرح", "شعار", "علامة",
-        "علامة تجارية", "عبارة", "عرض تقديمي", "كلمات", "كتابة", "لافتة", "مكتوب على الشاشة", "نقش", "نص", "عنوان"
-    ])
-
-    haram_keywords = sorted([
-        "alcohol", "astrology", "bacon", "bar", "beer", "bikini", "casino", "champagne", "church symbol", "cross",
-        "crucifix", "dancing", "drugs", "gambling", "hookah", "intimate", "kissing", "magic", "marijuana", "naked",
-        "nightclub", "nudity", "pork", "pub", "seductive", "sensual", "shisha", "smoking", "sorcery", "strip",
-        "tattoo", "tattoos", "vodka", "wine", "zodiac"
-    ])
-
-    arabic_haram = sorted(set([
-        "احضان", "اشباه عراة", "امراة", "بكيني", "تاروت", "خمر", "خمور", "راقصة", "رقص", "زفاف", "سحر", "سجائر",
-        "شبه عار", "شعر مكشوف", "شيشة", "صليب", "عارية", "علامة صليب", "عرق", "فتيات", "قبل", "قبلات", "قمار",
-        "كازينو", "كتابات", "لباس فاضح", "لحم خنزير", "مخدرات", "ملابس داخلية", "نادي ليلي", "نبيذ", "نرجيلة",
-        "نساء", "نساء يرقصن", "وجه مكشوف", "وشم", "رمز الصليب", "رمز مسيحي"
-    ]))
-
+        "nose", "skin", "baby", "babies", "teacher", "worker", "doctor", "nurse", "walking", "standing", "sitting"
+    ]
+    arabic_people = [
+        "شخص", "اشخاص", "وجوه", "انسان", "بشر", "رجل", "امرأة", "نساء", "رجال", "طفل", "اطفال",
+        "فتاة", "شباب", "صور شخصية", "عائلة", "مجموعة", "زفاف", "عرس", "صورة", "وجه", "أم", "أب",
+        "أصدقاء", "طالب", "طلاب", "طالبة", "معلم", "معلمة", "موظف", "طبيب", "راقصة", "راقص", "يمشي", "يجلس", "يقف"
+    ]
+    text_keywords = [
+        "text", "words", "write", "font", "caption", "subtitle", "typography", "sign", "label", "note", "quote", "title", "logo"
+    ]
+    arabic_text = [
+        "كتابة", "كلمات", "نص", "عنوان", "تسمية", "شعار", "لافتة", "مقولة", "مكتوب", "شرح"
+    ]
+    haram_keywords = [
+        "alcohol", "beer", "wine", "vodka", "champagne", "pork", "casino", "gambling", "tattoo", "bikini", "naked", "nudity", "strip", "nightclub", "pub", "smoking", "drugs", "marijuana"
+    ]
+    arabic_haram = [
+        "خمر", "خمور", "نبيذ", "عرق", "كازينو", "قمار", "وشم", "بكيني", "عارية", "عراة", "نادي ليلي", "حانة", "تدخين", "مخدرات", "حشيش", "رقص", "راقصة", "شيشة", "لحم خنزير"
+    ]
     all_keywords = people_keywords + arabic_people + text_keywords + arabic_text + haram_keywords + arabic_haram
     return any(word in text for word in all_keywords)
-
 
 def is_shorts(width, height, duration, min_duration=7, max_duration=120):
     ratio = width / height if height > 0 else 1
@@ -127,21 +109,22 @@ def get_pexels_shorts_videos(api_key, needed_duration, keywords):
         try:
             videos = resp.json().get('videos', [])
             for v in videos:
+                desc = v.get("description", "")
+                user_name = v.get("user", {}).get("name", "")
+                tags = " ".join(v.get("tags", []))
+                title = v.get("title", "")
+                filter_text = " ".join([desc, user_name, tags, title]).strip()
+                if contains_people_or_text(filter_text):
+                    continue
                 thumbnail_url = v.get("image") or ""
                 if thumbnail_url and detect_faces_from_thumbnail(thumbnail_url):
                     continue
-
                 best_file = get_best_video_file(v["video_files"])
                 if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
-                    shorts.append({
-                        "link": best_file["link"],
-                        "duration": v["duration"],
-                        "title": v.get("description", '')
-                    })
+                    shorts.append({"link": best_file["link"], "duration": v["duration"], "title": title})
         except Exception:
             continue
     return shorts
-
 
 def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
     shorts = []
@@ -157,28 +140,26 @@ def get_pixabay_shorts_videos(api_key, needed_duration, keywords):
         try:
             videos = resp.json().get("hits", [])
             for v in videos:
+                tags = v.get("tags", "")
+                user = v.get("user", "")
+                title = v.get("title", "")
+                filter_text = " ".join([tags, user, title]).strip()
+                if contains_people_or_text(filter_text):
+                    continue
                 thumbnail_id = v.get("picture_id")
                 if thumbnail_id:
                     thumbnail_url = f"https://i.vimeocdn.com/video/{thumbnail_id}_640x360.jpg"
                     if detect_faces_from_thumbnail(thumbnail_url):
                         continue
-
                 best_file = None
                 for quality, vid in v["videos"].items():
                     if vid["height"] >= 360 and (not best_file or vid["height"] < best_file["height"]):
                         best_file = vid
-
                 if best_file and is_shorts(best_file["width"], best_file["height"], v["duration"]):
-                    shorts.append({
-                        "link": best_file["url"],
-                        "duration": v["duration"],
-                        "title": v.get("tags", '')
-                    })
+                    shorts.append({"link": best_file["url"], "duration": v["duration"], "title": title})
         except Exception:
             continue
     return shorts
-
-
 
 def get_mixkit_shorts_videos(needed_duration, keywords):
     mixkit_links = [
@@ -272,35 +253,24 @@ def montage_effects(clip, do_bw, do_vignette, do_zoom, do_blur, vignette_strengt
         clip = clip.fx(vfx.blackwhite)
     return clip
 
-# ----------- الكود المصحح لرسم النص العربي بشكل مشكّل، متصل، RTL -----------
-
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
-    print("✅ النص كما هو (بالتشكيل وغير مشكّل الحروف):", text)
-
-    # 🚫 تحديد أقصى ارتفاع لتجنب الخطأ
-    max_height = 800
-    size = (size[0], min(size[1], max_height))
-
-    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    reshaped_text = arabic_reshaper.reshape(text)
+    bidi_text = get_display(reshaped_text)
+    img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
     try:
         font = ImageFont.truetype(font_path, fontsize)
     except:
         font = ImageFont.load_default()
-
-    # متابعة رسم النص (أكملها حسب كودك الأصلي)...
-
-
-    # تقسيم النص لعدة أسطر من اليسار لليمين بدون تشكيل أو دمج
     lines = []
-    words = text.split()
+    words = bidi_text.split()
     line = ""
     for word in words:
-        test_line = word if not line else line + " " + word
+        test_line = word if not line else word + " " + line
         try:
             bbox = draw.textbbox((0, 0), test_line, font=font)
             w = bbox[2] - bbox[0]
-        except AttributeError:
+        except Exception:
             w, _ = font.getsize(test_line)
         if w <= size[0] - 40:
             line = test_line
@@ -309,19 +279,17 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
             line = word
     if line:
         lines.append(line)
-
     total_text_height = len(lines) * fontsize + (len(lines)-1)*5
     y = (size[1] - total_text_height) // 2
-    for l in lines:
+    for l in reversed(lines):
         try:
             bbox = draw.textbbox((0, 0), l, font=font)
             w = bbox[2] - bbox[0]
-        except AttributeError:
+        except Exception:
             w, _ = font.getsize(l)
-        x = (size[0] - w) // 2
+        x = (size[0]-w)//2
         draw.text((x, y), l, font=font, fill="white")
         y += fontsize + 5
-
     return np.array(img)
 
 def split_text_for_timings(full_text, words_per_clip=4):
@@ -352,7 +320,7 @@ def get_clip_position(position, video_size, text_img_height):
         return ('center', h - text_img_height//2)
     elif position == "top":
         return ('center', 0)
-    else: # center
+    else:
         return ('center', (h - text_img_height)//2)
 
 def get_ayah_text_and_translation(sura_idx, ayah_num):
@@ -382,7 +350,6 @@ List only the keywords, comma-separated:"""
     )
     kws = response.generations[0].text.strip()
     return [k.strip() for k in kws.replace('\n','').split(',') if k.strip()]
-
 
 # ========== Streamlit App ==========
 st.set_page_config(page_title="فيديو قرآن شورتس ذكي", layout="centered")
