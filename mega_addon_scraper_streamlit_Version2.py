@@ -33,7 +33,11 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
             break
     video_clips = []
     total_dur = 0
-    for video_url in all_links:
+    i = 0
+    # اجمع الفيديوهات حتى تتجاوز مدة الصوت المطلوبة
+    while total_dur < needed_duration and i < len(all_links):
+        video_url = all_links[i]
+        i += 1
         st.info(f"تحميل فيديو: {video_url}")
         try:
             r = requests.get(video_url, stream=True)
@@ -45,15 +49,15 @@ def get_pexels_videos(keywords, min_height=720, needed_duration=30):
                 file_size = os.path.getsize(vid_file.name)
                 if file_size < 10000:
                     continue
-                clip = VideoFileClip(vid_file.name)
-                clip = clip.resize((1080,1920))
+                clip = VideoFileClip(vid_file.name).resize((1080,1920))
                 video_clips.append(clip)
                 total_dur += clip.duration
-                if total_dur >= needed_duration:
-                    break
         except Exception as e:
             st.warning(str(e))
             continue
+    if total_dur < needed_duration:
+        st.error("مدة الفيديوهات أقل من مدة الصوت. أعد المحاولة بكلمات مفتاحية أخرى أو آيات أقل.")
+        return []
     return video_clips
 
 def get_ayah_text(sura_idx, ayah_num):
@@ -73,13 +77,17 @@ def get_audio_segment(qari_id, sura_idx, ayah):
     return segment
 
 def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
+    # تأكد أن الخط موجود في المجلد!
+    if not os.path.exists(font_path):
+        font_path = "NotoNaskhArabic-Regular.ttf"  # خط بديل لو لم يوجد Amiri
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
     img = Image.new("RGBA", size, (0,0,0,0))
     draw = ImageDraw.Draw(img)
     try:
         font = ImageFont.truetype(font_path, fontsize)
-    except:
+    except Exception as e:
+        st.warning(f"خطأ في تحميل الخط العربي: {e}")
         font = ImageFont.load_default()
     try:
         bbox = draw.textbbox((0, 0), bidi_text, font=font)
@@ -93,7 +101,14 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=60):
 def split_text_chunks(text, chunk_size=3):
     """يقسم النص إلى قوائم من كل chunk_size كلمات"""
     words = text.split()
-    return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
+    # إعادة الربط الصحيح حتى الحروف لا تظهر متقطعة
+    chunks = []
+    i = 0
+    while i < len(words):
+        chunk = " ".join(words[i:i+chunk_size])
+        chunks.append(chunk)
+        i += chunk_size
+    return chunks
 
 st.title("فيديو قرآن شورتس من عدة فيديوهات بيكسيلز مع تقسيم النص")
 
@@ -127,7 +142,6 @@ if st.button("إنشاء الفيديو"):
     st.info("جاري تحميل وتجميع فيديوهات الخلفية من بيكسيلز...")
     video_clips = get_pexels_videos(keywords_default, needed_duration=total_duration)
     if not video_clips:
-        st.error("تعذر العثور على فيديوهات بيكسيلز مناسبة.")
         st.stop()
     concat_video = concatenate_videoclips(video_clips).subclip(0, total_duration)
 
@@ -145,10 +159,11 @@ if st.button("إنشاء الفيديو"):
 
     final = CompositeVideoClip([concat_video] + text_clips).set_audio(audio_clip).set_duration(total_duration)
 
-    output_path = "quran_shorts_pexels_multi_chunks.mp4"
+    output_path = "quran_shorts_pexels_multi_chunks_fixed.mp4"
     st.info("جاري تصدير الفيديو...")
     final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
     st.success("تم الإنشاء!")
     st.video(output_path)
     with open(output_path, "rb") as f:
-        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels_multi_chunks.mp4", mime="video/mp4")
+        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels_multi_chunks_fixed.mp4", mime="video/mp4")
+        
