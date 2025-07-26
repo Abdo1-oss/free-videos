@@ -5,8 +5,9 @@ import os
 import random
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip, ImageClip, concatenate_videoclips
-from PIL import Image
-import cairosvg
+from PIL import Image, ImageDraw, ImageFont
+import arabic_reshaper
+from bidi.algorithm import get_display
 import numpy as np
 
 QURAA = [{"name": "الحصري مرتل", "id": "Husary_64kbps"}, {"name": "العفاسي", "id": "Alafasy_64kbps"}]
@@ -76,30 +77,21 @@ def get_audio_segment(qari_id, sura_idx, ayah):
         segment = AudioSegment.from_mp3(temp_ayah_file.name)
     return segment
 
-def create_text_image_svg(text, size=(1080, 200), fontsize=60):
-    # HTML/SVG بخط Amiri من Google Fonts
-    html = f'''
-    <svg width="{size[0]}" height="{size[1]}" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Amiri&display=swap');
-        .text {{
-          font-family: 'Amiri', serif;
-          font-size: {fontsize}px;
-          fill: white;
-          text-anchor: middle;
-          dominant-baseline: middle;
-        }}
-      </style>
-      <rect width="100%" height="100%" fill="rgba(0,0,0,0)" />
-      <text x="50%" y="50%" class="text">{text}</text>
-    </svg>
-    '''
-    with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as svg_file:
-        svg_file.write(html.encode("utf-8"))
-        svg_path = svg_file.name
-    png_path = svg_path.replace('.svg', '.png')
-    cairosvg.svg2png(url=svg_path, write_to=png_path)
-    img = Image.open(png_path).convert('RGBA')
+def create_text_image(text, size=(1080, 200), font_path="Amiri-Regular.ttf", fontsize=60):
+    if not os.path.exists(font_path):
+        raise FileNotFoundError(f"Font file '{font_path}' not found in the current directory!")
+    reshaped_text = arabic_reshaper.reshape(text)
+    bidi_text = get_display(reshaped_text)
+    img = Image.new("RGBA", size, (0,0,0,0))
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype(font_path, fontsize)
+    try:
+        bbox = draw.textbbox((0, 0), bidi_text, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+    except AttributeError:
+        w, h = font.getsize(bidi_text)
+    draw.text(((size[0]-w)//2, (size[1]-h)//2), bidi_text, font=font, fill="white")
     return np.array(img)
 
 def split_text_chunks(text, chunk_size=3):
@@ -157,7 +149,7 @@ if st.button("إنشاء الفيديو"):
         chunks = split_text_chunks(text, chunk_size=3)
         chunk_dur = ayah_dur / max(1, len(chunks))
         for chunk in chunks:
-            text_img = create_text_image_svg(chunk, size=(1080, 200), fontsize=60)
+            text_img = create_text_image(chunk, (1080, 200), "Amiri-Regular.ttf", 60)
             text_clip = ImageClip(text_img, duration=chunk_dur).set_start(start).set_position(("center","bottom"))
             text_clips.append(text_clip)
             start += chunk_dur
