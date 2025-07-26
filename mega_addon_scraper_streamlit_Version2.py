@@ -16,31 +16,42 @@ SURA_AYAHS = [7, 286, 200, 176, 120]
 
 PEXELS_API_KEY = "pLcIoo3oNdhqna28AfdaBYhkE3SFps9oRGuOsxY3JTe92GcVDZpwZE9i"
 
-def get_pexels_video(keywords):
+def get_pexels_video(keywords, min_height=720, max_trials=10):
     headers = {"Authorization": PEXELS_API_KEY}
     query = random.choice(keywords)
-    params = {"query": query, "per_page": 15}
+    params = {"query": query, "per_page": 20}
     resp = requests.get("https://api.pexels.com/videos/search", headers=headers, params=params)
     videos = []
     if resp.ok:
         for v in resp.json().get("videos", []):
             for vf in v.get("video_files", []):
-                if vf.get("width", 0) < vf.get("height", 1) and vf.get("height", 1) >= 720:
+                # نختار فيديوهات عمودية فقط
+                if vf.get("width", 0) < vf.get("height", 1) and vf.get("height", 1) >= min_height:
                     videos.append(vf.get("link"))
-    if videos:
-        return random.choice(videos)
-    return None
-
-def get_best_video(keywords):
-    link = get_pexels_video(keywords)
-    if link:
-        return link
-    videos = [
-        "https://assets.mixkit.co/videos/download/mixkit-clouds-in-the-sky-123.mp4",
-        "https://assets.mixkit.co/videos/download/mixkit-mountain-landscape-1233.mp4",
-        "https://assets.mixkit.co/videos/download/mixkit-sunrise-in-the-mountains-1176.mp4"
-    ]
-    return random.choice(videos)
+    # جرب حتى 10 روابط حتى تجد فيديو صالح
+    for trial in range(min(max_trials, len(videos))):
+        video_url = videos[trial]
+        st.info(f"جاري تجربة فيديو بيكسيلز رقم {trial+1}: {video_url}")
+        r = requests.get(video_url, stream=True)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as vid_file:
+            for chunk in r.iter_content(chunk_size=1024*1024):
+                if chunk:
+                    vid_file.write(chunk)
+            vid_file.flush()
+            file_size = os.path.getsize(vid_file.name)
+            st.info(f"حجم الملف المحمل: {file_size} بايت")
+            if file_size < 10000:
+                st.warning(f"هذا الفيديو غير صالح أو محمي (الحجم صغير جدًا). جرب التالي...")
+                continue
+            try:
+                clip = VideoFileClip(vid_file.name)
+                # إذا نجح فتح الفيديو نعيد الرابط والملف
+                return clip, vid_file.name
+            except Exception as e:
+                st.warning(f"فشل فتح الفيديو بواسطة MoviePy: {e}. جرب التالي...")
+                continue
+    st.error("لم يتم العثور على فيديو بيكسيلز صالح بعد عدة محاولات.")
+    return None, None
 
 def get_ayah_text(sura_idx, ayah_num):
     url = f"https://api.alquran.cloud/v1/ayah/{sura_idx}:{ayah_num}/ar"
@@ -56,7 +67,6 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
         font = ImageFont.truetype(font_path, fontsize)
     except:
         font = ImageFont.load_default()
-    # استخدم textbbox إذا متاحة، وإلا getsize
     try:
         bbox = draw.textbbox((0, 0), bidi_text, font=font)
         w = bbox[2] - bbox[0]
@@ -66,7 +76,7 @@ def create_text_image(text, size, font_path="Amiri-Regular.ttf", fontsize=50):
     draw.text(((size[0]-w)//2, (size[1]-h)//2), bidi_text, font=font, fill="white")
     return np.array(img)
 
-st.title("فيديو قرآن شورتس بسيط")
+st.title("فيديو قرآن شورتس من بيكسيلز فقط")
 
 selected_qari = st.selectbox("اختر القارئ:", [q["name"] for q in QURAA])
 qari_id = [q["id"] for q in QURAA][[q["name"] for q in QURAA].index(selected_qari)]
@@ -102,22 +112,12 @@ if st.button("إنشاء الفيديو"):
     audio_clip = AudioFileClip(audio_path)
     duration = audio_clip.duration
 
-    st.info("جاري تحميل فيديو الخلفية...")
-    video_url = get_best_video(keywords_default)
-    if not video_url:
-        st.error("تعذر الحصول على فيديو مناسب من بيكسيلز أو Mixkit")
+    st.info("جاري تحميل فيديو الخلفية من بيكسيلز...")
+    clip, fname = get_pexels_video(keywords_default)
+    if not clip:
+        st.error("تعذر العثور على فيديو بيكسيلز مناسب بعد عدة محاولات.")
         st.stop()
-    r = requests.get(video_url, stream=True)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as vid_file:
-        for chunk in r.iter_content(chunk_size=1024*1024):
-            if chunk:
-                vid_file.write(chunk)
-        vid_file.flush()
-        if os.path.getsize(vid_file.name) < 10000:
-            st.error("فشل تحميل الفيديو أو الملف غير صالح")
-            st.stop()
-        clip = VideoFileClip(vid_file.name)
-        video_clip = clip.subclip(0, min(duration, clip.duration)).resize((1080,1920))
+    video_clip = clip.subclip(0, min(duration, clip.duration)).resize((1080,1920))
 
     st.info("جاري تجهيز النص...")
     ayat_text = " ".join(ayat_texts)
@@ -126,10 +126,10 @@ if st.button("إنشاء الفيديو"):
 
     final = CompositeVideoClip([video_clip, text_clip.set_start(0)]).set_audio(audio_clip).set_duration(duration)
 
-    output_path = "quran_shorts_simple.mp4"
+    output_path = "quran_shorts_pexels.mp4"
     st.info("جاري تصدير الفيديو...")
     final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
     st.success("تم الإنشاء!")
     st.video(output_path)
     with open(output_path, "rb") as f:
-        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_simple.mp4", mime="video/mp4")
+        st.download_button("تحميل الفيديو", f, file_name="quran_shorts_pexels.mp4", mime="video/mp4")
